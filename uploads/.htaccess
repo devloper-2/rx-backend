@@ -1,0 +1,13 @@
+Options -Indexes
+
+# Block PHP execution in uploads directory (security)
+<FilesMatch "\.php$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+# Allow common media types
+<FilesMatch "\.(jpg|jpeg|png|gif|webp|pdf|svg)$">
+    Order Allow,Deny
+    Allow from all
+</FilesMatch>

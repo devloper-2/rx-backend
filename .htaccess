@@ -1,0 +1,26 @@
+Options -Indexes
+Options -MultiViews
+
+RewriteEngine On
+
+# Pass Authorization header to PHP
+RewriteCond %{HTTP:Authorization} ^(.*)$
+RewriteRule ^(.*)$ - [E=HTTP_AUTHORIZATION:%1]
+
+# Block access to sensitive directories
+RewriteRule ^logs/ - [F,L]
+RewriteRule ^config/ - [F,L]
+RewriteRule ^core/ - [F,L]
+RewriteRule ^helpers/ - [F,L]
+RewriteRule ^app/ - [F,L]
+RewriteRule ^routes/ - [F,L]
+RewriteRule ^migrations/ - [F,L]
+RewriteRule ^storage/ - [F,L]
+
+# Allow uploads to be accessed directly
+RewriteRule ^uploads/ - [L]
+
+# Route all other requests to index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]
