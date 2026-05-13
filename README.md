@@ -96,7 +96,7 @@ Copy the entire folder to your htdocs/www directory. Make sure `mod_rewrite` is 
 
 ### Base URL
 ```
-http://localhost/php-rest-api
+http://localhost/rx-backend
 ```
 
 ### Authentication

@@ -30,7 +30,8 @@ class Config
                 'charset' => 'utf8mb4',
             ],
             'jwt' => [
-                'secret'          => 'LOCAL_SECRET_CHANGE_THIS_32CHARS!!',
+                //'secret'          => 'LOCAL_SECRET_CHANGE_THIS_32CHARS!!',
+                'secret'          => 'abcdefghijklmnopqrstuvwxyz',
                 'algo'            => 'HS256',
                 'expiry'          => 3600,        // 1 hour (seconds)
                 'refresh_expiry'  => 604800,      // 7 days

@@ -41,7 +41,7 @@ class AuthController extends BaseController
             ]);
 
             $accessToken  = $this->auth->generateToken(['user_id' => $userId, 'role' => 'user']);
-            $refreshToken = $this->auth->generateRefreshToken($userId);
+            $refreshToken = $this->auth->generateRefreshToken($userId, $accessToken);
 
             $this->db->commit();
 
@@ -85,7 +85,7 @@ class AuthController extends BaseController
         }
 
         $accessToken  = $this->auth->generateToken(['user_id' => (int) $user['id'], 'role' => $user['role']]);
-        $refreshToken = $this->auth->generateRefreshToken((int) $user['id']);
+        $refreshToken = $this->auth->generateRefreshToken((int) $user['id'], $accessToken);
 
         // Update last login
         $this->db->update('users', ['last_login_at' => CommonHelper::now(), 'updated_at' => CommonHelper::now()], 'id = :id', [':id' => $user['id']]);

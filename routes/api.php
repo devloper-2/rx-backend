@@ -17,6 +17,29 @@ declare(strict_types=1);
  *   GET  domain.com/user/detail/42   (42 = {id} URL param)
  */
 
+
+
+
+// new auth route for testing 
+// url will be http://localhost/rx-backend/auth/
+
+// for register
+$router->post(
+    'auth/register-new',
+    'NewAuth', 'register',
+    ['rate_limit' => ['max' => 90, 'window' => 7 * 24 * 60 * 60]]  // 90 registrations/ week IP
+);
+
+// for login
+$router->post(
+    'auth/login-new',
+    'NewAuth', 'login',
+    ['rate_limit' => ['max' => 90, 'window' => 7 * 24 * 60 * 60]]  // 90 login attempts/ week IP
+);
+
+// ====================== ABOVE ALL API ARE FOR TESTING ======================== //
+
+
 // ── Auth routes (no JWT required) ────────────────────────────────────────────
 $router->post(
     'auth/register',

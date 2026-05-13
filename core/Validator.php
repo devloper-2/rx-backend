@@ -74,6 +74,73 @@ class Validator
         $label = ucfirst(str_replace('_', ' ', $field));
 
         switch ($rule) {
+
+        // BELOW ALL RULES ARE FOR TESTING
+            
+            case 'country_code_validation':
+                if ($value !== null && !preg_match('/^\+[0-9]{1,5}$/', (string)$value)) {
+                    $this->addError($field, "{$label} must start with + and contain 1 to 5 digits.");
+                }
+            break;
+
+            case 'password_validation':
+                if ($value !== null) {
+                    $errors = [];
+                    if (strlen((string)$value) < 8) {
+                        $errors[] = "at least 8 characters";
+                    }
+                    if (strlen((string)$value) > 20) {
+                        $errors[] = "no more than 20 characters";
+                    }
+                    if (!preg_match('/[A-Z]/', (string)$value)) {
+                        $errors[] = "at least one uppercase letter";
+                    }
+                    if (!preg_match('/[a-z]/', (string)$value)) {
+                        $errors[] = "at least one lowercase letter";
+                    }
+                    if (!preg_match('/[0-9]/', (string)$value)) {
+                        $errors[] = "at least one number";
+                    }
+                    if (!preg_match('/[\W_]/', (string)$value)) {
+                        $errors[] = "at least one special character";
+                    }
+                    if ($errors) {
+                        $this->addError($field, "{$label} must contain " . implode(', ', $errors) . ".");
+                    }
+                }
+                break;
+
+            case 'phone_validation':
+                if ($value !== null) {
+                    $countryCode = $this->data['countrycode'] ?? null;
+                    if ($countryCode === '+91') {
+                        if (!preg_match('/^[0-9]{10}$/', (string)$value)) {
+                            $this->addError($field, "{$label} must contain exactly 10 digits for country code +91.");
+                        }
+                    } elseif (!preg_match('/^[0-9]{7,20}$/', (string)$value)) {
+                        $this->addError($field, "{$label} must contain only numbers and be between 7 and 20 digits.");
+                    }
+                }
+                break;
+
+            case 'unique_phone':
+    if ($value !== null) {
+        $db  = Database::getInstance();
+        $row = $db->getRow(
+            'SELECT id FROM users WHERE phone = :phone AND countrycode = :code',
+            [
+                ':phone' => $value,
+                ':code'  => $this->data['countrycode'] ?? ''
+            ]
+        );
+        if ($row) {
+            $this->addError($field, "{$label} already registered.");
+        }
+    }
+break;
+
+        // ABOVE ALL RULES ARE FOR TESTING
+
             case 'required':
                 if ($value === null || $value === '' || (is_array($value) && count($value) === 0)) {
                     $this->addError($field, "{$label} is required.");

@@ -32,12 +32,13 @@ return [
         // ── refresh_tokens ───────────────────────────────────────────────────
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS `refresh_tokens` (
-                `id`         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                `user_id`    INT UNSIGNED NOT NULL,
-                `token`      CHAR(64)     NOT NULL UNIQUE,
-                `revoked`    TINYINT(1)   NOT NULL DEFAULT 0,
-                `expires_at` DATETIME     NOT NULL,
-                `created_at` DATETIME     NOT NULL,
+                `id`           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                `user_id`      INT UNSIGNED NOT NULL,
+                `token`        CHAR(64)     NOT NULL UNIQUE,
+                `access_token` TEXT          DEFAULT NULL,
+                `revoked`      TINYINT(1)   NOT NULL DEFAULT 0,
+                `expires_at`   DATETIME     NOT NULL,
+                `created_at`   DATETIME     NOT NULL,
                 INDEX `idx_rt_user_id` (`user_id`),
                 INDEX `idx_rt_token`   (`token`),
                 CONSTRAINT `fk_rt_user` FOREIGN KEY (`user_id`)
