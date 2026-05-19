@@ -23,6 +23,7 @@ declare(strict_types=1);
 // new auth route for testing 
 // url will be http://localhost/rx-backend/auth/
 
+//api.php
 // for register
 $router->post(
     'auth/register-new',
@@ -35,6 +36,12 @@ $router->post(
     'auth/login-new',
     'NewAuth', 'login',
     ['rate_limit' => ['max' => 90, 'window' => 7 * 24 * 60 * 60]]  // 90 login attempts/ week IP
+);
+
+// for logout
+$router->post(
+    'auth/logout-new',
+    'NewAuth', 'logout'
 );
 
 // ====================== ABOVE ALL API ARE FOR TESTING ======================== //
