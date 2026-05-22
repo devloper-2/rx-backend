@@ -124,20 +124,20 @@ class Validator
                 break;
 
             case 'unique_phone':
-    if ($value !== null) {
-        $db  = Database::getInstance();
-        $row = $db->getRow(
-            'SELECT id FROM users WHERE phone = :phone AND countrycode = :code',
-            [
-                ':phone' => $value,
-                ':code'  => $this->data['countrycode'] ?? ''
-            ]
-        );
-        if ($row) {
-            $this->addError($field, "{$label} already registered.");
-        }
-    }
-break;
+                if ($value !== null) {
+                    $db  = Database::getInstance();
+                    $row = $db->getRow(
+                        'SELECT id FROM users WHERE phone = :phone AND countrycode = :code',
+                        [
+                            ':phone' => $value,
+                            ':code'  => $this->data['countrycode'] ?? ''
+                        ]
+                    );
+                    if ($row) {
+                        $this->addError($field, "{$label} already registered.");
+                    }
+                }
+            break;
 
         // ABOVE ALL RULES ARE FOR TESTING
 

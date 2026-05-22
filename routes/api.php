@@ -44,6 +44,20 @@ $router->post(
     'NewAuth', 'logout'
 );
 
+// for forgot password new
+$router->post(
+    'auth/forgot-password-otp', 
+    'NewAuth', 
+    'forgotPasswordOtp'
+);
+
+// for reset password new
+$router->post(
+    'auth/reset-password-otp', 
+    'NewAuth', 
+    'resetPasswordOtp'
+);
+
 // ====================== ABOVE ALL API ARE FOR TESTING ======================== //
 
 
