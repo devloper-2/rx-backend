@@ -17,6 +17,8 @@ declare(strict_types=1);
  *   GET  domain.com/user/detail/42   (42 = {id} URL param)
  */
 
+/** @var \Laravel\Lumen\Routing\Router $router */
+
 
 
 
@@ -56,6 +58,34 @@ $router->post(
     'auth/reset-password-otp', 
     'NewAuth', 
     'resetPasswordOtp'
+);
+
+// for verify the details while registering then login
+$router->post(
+    'auth/verify-otp',
+    'NewAuth',
+    'verifyOtp'
+);
+
+// resend otp for verify details while registering login
+$router->post(
+    'auth/resend-otp',
+    'NewAuth',
+    'resendOtp'
+);
+
+// check phone number present in first page register
+$router->post(
+    'auth/check-phone',
+    'NewAuth', 
+    'checkPhone'
+);
+
+// check email present in first page register
+$router->post(
+    'auth/check-email',
+    'NewAuth', 
+    'checkEmail'
 );
 
 // ====================== ABOVE ALL API ARE FOR TESTING ======================== //

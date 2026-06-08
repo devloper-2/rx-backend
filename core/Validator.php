@@ -134,7 +134,7 @@ class Validator
                         ]
                     );
                     if ($row) {
-                        $this->addError($field, "{$label} already registered.");
+                        $this->addError($field, "{$label} is already registered.");
                     }
                 }
             break;
@@ -266,7 +266,7 @@ class Validator
                     $db  = Database::getInstance();
                     $row = $db->getRow('SELECT id FROM users WHERE email = :email', [':email' => $value]);
                     if ($row) {
-                        $this->addError($field, "{$label} is already taken.");
+                        $this->addError($field, "{$label} is already registered.");
                     }
                 }
                 break;
