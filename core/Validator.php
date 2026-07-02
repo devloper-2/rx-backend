@@ -3,287 +3,233 @@
 declare(strict_types=1);
 
 /**
- * Validator — Validate input arrays against a rule set.
- *
- * Usage:
- *   $v = Validator::make($data, [
- *       'email'    => 'required|email',
- *       'password' => 'required|min:8|max:64',
- *       'age'      => 'required|integer|min:18|max:120',
- *       'role'     => 'required|in:admin,user,moderator',
- *       'avatar'   => 'nullable|string',
- *   ]);
- *
- *   if (!$v->passes()) {
- *       Response::send(422, [], 'Validation Failed', false, $v->errors());
- *   }
+ * Validator — Advanced rule-based validation system
  */
 class Validator
 {
     private array $data;
     private array $rules;
     private array $errors = [];
-    private array $messages;
 
-    private function __construct(array $data, array $rules, array $messages = [])
+    private function __construct(array $data, array $rules)
     {
-        $this->data     = $data;
-        $this->rules    = $rules;
-        $this->messages = $messages;
-        $this->run();
+        $this->data  = $data;
+        $this->rules = $rules;
+        $this->validate();
     }
 
-    public static function make(array $data, array $rules, array $messages = []): static
+    public static function make(array $data, array $rules): self
     {
-        return new static($data, $rules, $messages);
+        return new self($data, $rules);
     }
 
-    // ── Run all rules ────────────────────────────────────────────────────────
-    private function run(): void
+    // ─────────────────────────────────────────────────────────────────────────
+    private function validate(): void
     {
         foreach ($this->rules as $field => $ruleString) {
-            $rules    = explode('|', $ruleString);
-            $value    = $this->data[$field] ?? null;
-            $nullable = in_array('nullable', $rules, true);
+
+            $rules = explode('|', $ruleString);
+            $value = $this->data[$field] ?? null;
+            $label = ucfirst(str_replace('_', ' ', $field));
 
             foreach ($rules as $rule) {
-                if ($rule === 'nullable') continue;
 
-                // Skip non-required empty fields
-                if ($rule !== 'required' && ($value === null || $value === '') && $nullable) {
-                    continue;
+                $param = null;
+
+                if (str_contains($rule, ':')) {
+                    [$rule, $param] = explode(':', $rule, 2);
                 }
 
-                [$ruleName, $ruleParam] = $this->parseRule($rule);
-                $this->applyRule($field, $value, $ruleName, $ruleParam);
+                switch ($rule) {
+
+                    case 'required':
+                        if ($value === null || $value === '') {
+                            $this->addError($field, "{$label} is required.");
+                        }
+                        break;
+
+                    case 'nullable':
+                        if ($value === null || $value === '') {
+                            break 2;
+                        }
+                        break;
+
+                    case 'string':
+                        if ($value !== null && !is_string($value)) {
+                            $this->addError($field, "{$label} must be a string.");
+                        }
+                        break;
+
+                    case 'numeric':
+                        if ($value !== null && !is_numeric($value)) {
+                            $this->addError($field, "{$label} must be numeric.");
+                        }
+                        break;
+
+                    case 'integer':
+                        if ($value !== null && filter_var($value, FILTER_VALIDATE_INT) === false) {
+                            $this->addError($field, "{$label} must be an integer.");
+                        }
+                        break;
+
+                    case 'boolean':
+                        if ($value !== null && !is_bool($value)) {
+                            $this->addError($field, "{$label} must be true or false.");
+                        }
+                        break;
+
+                    case 'email':
+                        if ($value !== null && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                            $this->addError($field, "{$label} must be a valid email.");
+                        }
+                        break;
+
+                    case 'min':
+                        if ($value !== null && strlen((string)$value) < (int)$param) {
+                            $this->addError($field, "{$label} must be at least {$param} characters.");
+                        }
+                        break;
+
+                    case 'max':
+                        if ($value !== null && strlen((string)$value) > (int)$param) {
+                            $this->addError($field, "{$label} must not exceed {$param} characters.");
+                        }
+                        break;
+
+                    case 'in':
+                        if ($value !== null) {
+                            $allowed = explode(',', $param);
+                            if (!in_array((string)$value, $allowed, true)) {
+                                $this->addError($field, "{$label} must be one of: " . implode(', ', $allowed));
+                            }
+                        }
+                        break;
+
+                    case 'mobile':
+                        //if ($value !== null && !preg_match('/^\+[0-9]{8,15}$/', (string)$value)) {
+                        //    $this->addError($field, "{$label} must be valid (e.g. +919999999999).");
+                        //}
+
+                        if ($value !== null && !preg_match('/^(\+?[0-9]{1,4})?[0-9]{8,15}$/', (string)$value)) {
+                            $this->addError($field, "{$label} must be valid (e.g. +919999999999 or 9999999999).");
+                        }
+
+                        break;
+
+                    case 'strong_password':
+                        if ($value !== null) {
+                            $errors = [];
+
+                            if (strlen((string)$value) < 8) {
+                                $errors[] = "8+ characters";
+                            }
+                            if (!preg_match('/[A-Z]/', (string)$value)) {
+                                $errors[] = "1 uppercase";
+                            }
+                            if (!preg_match('/[a-z]/', (string)$value)) {
+                                $errors[] = "1 lowercase";
+                            }
+                            if (!preg_match('/[0-9]/', (string)$value)) {
+                                $errors[] = "1 number";
+                            }
+                            if (!preg_match('/[\W]/', (string)$value)) {
+                                $errors[] = "1 special character";
+                            }
+
+                            if ($errors) {
+                                $this->addError($field, "{$label} must contain " . implode(', ', $errors));
+                            }
+                        }
+                        break;
+
+                    case 'confirmed':
+                        $confirmField = $field . '_confirmation';
+                        if (($this->data[$confirmField] ?? null) !== $value) {
+                            $this->addError($field, "{$label} confirmation does not match.");
+                        }
+                        break;
+
+                    case 'unique':
+                        if ($value !== null && $param) {
+                            [$table, $column] = explode(',', $param);
+                            $db = Database::getInstance();
+
+                            $sql = "SELECT id FROM {$table} WHERE {$column} = :val";
+
+                            if ($this->tableHasDeletedAt($table)) {
+                                $sql .= " AND deleted_at IS NULL";
+                            }
+
+                            $row = $db->getRow($sql, [':val' => $value]);
+
+                            if ($row) {
+                                $this->addError($field, "{$label} already exists.");
+                            }
+                        }
+                        break;
+
+                    case 'exists':
+                        if ($value !== null && $param) {
+                            [$table, $column] = explode(',', $param);
+                            $db = Database::getInstance();
+
+                            $sql = "SELECT id FROM {$table} WHERE {$column} = :val";
+
+                            if ($this->tableHasDeletedAt($table)) {
+                                $sql .= " AND deleted_at IS NULL";
+                            }
+
+                            $row = $db->getRow($sql, [':val' => $value]);
+
+                            if (!$row) {
+                                $this->addError($field, "{$label} does not exist.");
+                            }
+                        }
+                        break;
+                    case 'doctor_exists':
+                        if ($value !== null) {
+                            $db = Database::getInstance();
+
+                            $row = $db->getRow(
+                                "SELECT id FROM doctors WHERE id = :id",
+                                [':id' => $value]
+                            );
+
+                            if (!$row) {
+                                $this->addError($field, "Doctor not found.");
+                            }
+                        }
+                        break;
+
+                    case 'date':
+                        if ($value !== null && strtotime($value) === false) {
+                            $this->addError($field, "{$label} must be a valid date.");
+                        }
+                        break;
+
+                    case 'file':
+                        if (!isset($_FILES[$field])) {
+                            $this->addError($field, "{$label} file is required.");
+                        }
+                        break;
+
+                    case 'image':
+                        if (isset($_FILES[$field])) {
+                            $type = $_FILES[$field]['type'] ?? '';
+                            if (!str_starts_with($type, 'image/')) {
+                                $this->addError($field, "{$label} must be an image.");
+                            }
+                        }
+                        break;
+                }
             }
         }
     }
 
-    private function parseRule(string $rule): array
-    {
-        if (str_contains($rule, ':')) {
-            [$name, $param] = explode(':', $rule, 2);
-            return [$name, $param];
-        }
-        return [$rule, null];
-    }
-
-    private function applyRule(string $field, mixed $value, string $rule, ?string $param): void
-    {
-        $label = ucfirst(str_replace('_', ' ', $field));
-
-        switch ($rule) {
-
-        // BELOW ALL RULES ARE FOR TESTING
-            
-            case 'country_code_validation':
-                if ($value !== null && !preg_match('/^\+[0-9]{1,5}$/', (string)$value)) {
-                    $this->addError($field, "{$label} must start with + and contain 1 to 5 digits.");
-                }
-            break;
-
-            case 'password_validation':
-                if ($value !== null) {
-                    $errors = [];
-                    if (strlen((string)$value) < 8) {
-                        $errors[] = "at least 8 characters";
-                    }
-                    if (strlen((string)$value) > 20) {
-                        $errors[] = "no more than 20 characters";
-                    }
-                    if (!preg_match('/[A-Z]/', (string)$value)) {
-                        $errors[] = "at least one uppercase letter";
-                    }
-                    if (!preg_match('/[a-z]/', (string)$value)) {
-                        $errors[] = "at least one lowercase letter";
-                    }
-                    if (!preg_match('/[0-9]/', (string)$value)) {
-                        $errors[] = "at least one number";
-                    }
-                    if (!preg_match('/[\W_]/', (string)$value)) {
-                        $errors[] = "at least one special character";
-                    }
-                    if ($errors) {
-                        $this->addError($field, "{$label} must contain " . implode(', ', $errors) . ".");
-                    }
-                }
-                break;
-
-            case 'phone_validation':
-                if ($value !== null) {
-                    $countryCode = $this->data['countrycode'] ?? null;
-                    if ($countryCode === '+91') {
-                        if (!preg_match('/^[0-9]{10}$/', (string)$value)) {
-                            $this->addError($field, "{$label} must contain exactly 10 digits for country code +91.");
-                        }
-                    } elseif (!preg_match('/^[0-9]{7,20}$/', (string)$value)) {
-                        $this->addError($field, "{$label} must contain only numbers and be between 7 and 20 digits.");
-                    }
-                }
-                break;
-
-            case 'unique_phone':
-                if ($value !== null) {
-                    $db  = Database::getInstance();
-                    $row = $db->getRow(
-                        'SELECT id FROM users WHERE phone = :phone AND countrycode = :code',
-                        [
-                            ':phone' => $value,
-                            ':code'  => $this->data['countrycode'] ?? ''
-                        ]
-                    );
-                    if ($row) {
-                        $this->addError($field, "{$label} is already registered.");
-                    }
-                }
-            break;
-
-        // ABOVE ALL RULES ARE FOR TESTING
-
-            case 'required':
-                if ($value === null || $value === '' || (is_array($value) && count($value) === 0)) {
-                    $this->addError($field, "{$label} is required.");
-                }
-                break;
-
-            case 'string':
-                if ($value !== null && !is_string($value)) {
-                    $this->addError($field, "{$label} must be a string.");
-                }
-                break;
-
-            case 'integer':
-            case 'int':
-                if ($value !== null && !filter_var($value, FILTER_VALIDATE_INT)) {
-                    $this->addError($field, "{$label} must be an integer.");
-                }
-                break;
-
-            case 'numeric':
-                if ($value !== null && !is_numeric($value)) {
-                    $this->addError($field, "{$label} must be numeric.");
-                }
-                break;
-
-            case 'boolean':
-            case 'bool':
-                if ($value !== null && !in_array($value, [true, false, 1, 0, '1', '0'], true)) {
-                    $this->addError($field, "{$label} must be a boolean.");
-                }
-                break;
-
-            case 'email':
-                if ($value !== null && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
-                    $this->addError($field, "{$label} must be a valid email address.");
-                }
-                break;
-
-            case 'url':
-                if ($value !== null && !filter_var($value, FILTER_VALIDATE_URL)) {
-                    $this->addError($field, "{$label} must be a valid URL.");
-                }
-                break;
-
-            case 'min':
-                if ($value !== null) {
-                    if (is_string($value) && mb_strlen($value) < (int) $param) {
-                        $this->addError($field, "{$label} must be at least {$param} characters.");
-                    } elseif (is_numeric($value) && (float) $value < (float) $param) {
-                        $this->addError($field, "{$label} must be at least {$param}.");
-                    }
-                }
-                break;
-
-            case 'max':
-                if ($value !== null) {
-                    if (is_string($value) && mb_strlen($value) > (int) $param) {
-                        $this->addError($field, "{$label} may not be greater than {$param} characters.");
-                    } elseif (is_numeric($value) && (float) $value > (float) $param) {
-                        $this->addError($field, "{$label} may not be greater than {$param}.");
-                    }
-                }
-                break;
-
-            case 'in':
-                if ($value !== null) {
-                    $allowed = explode(',', $param);
-                    if (!in_array($value, $allowed, true)) {
-                        $this->addError($field, "{$label} must be one of: {$param}.");
-                    }
-                }
-                break;
-
-            case 'not_in':
-                if ($value !== null) {
-                    $forbidden = explode(',', $param);
-                    if (in_array($value, $forbidden, true)) {
-                        $this->addError($field, "{$label} contains an invalid value.");
-                    }
-                }
-                break;
-
-            case 'regex':
-                if ($value !== null && !preg_match($param, (string) $value)) {
-                    $this->addError($field, "{$label} format is invalid.");
-                }
-                break;
-
-            case 'date':
-                if ($value !== null && strtotime((string) $value) === false) {
-                    $this->addError($field, "{$label} must be a valid date.");
-                }
-                break;
-
-            case 'alpha':
-                if ($value !== null && !ctype_alpha((string) $value)) {
-                    $this->addError($field, "{$label} may only contain letters.");
-                }
-                break;
-
-            case 'alpha_num':
-                if ($value !== null && !ctype_alnum((string) $value)) {
-                    $this->addError($field, "{$label} may only contain letters and numbers.");
-                }
-                break;
-
-            case 'array':
-                if ($value !== null && !is_array($value)) {
-                    $this->addError($field, "{$label} must be an array.");
-                }
-                break;
-
-            case 'confirmed':
-                $confirmation = $this->data[$field . '_confirmation'] ?? null;
-                if ($value !== $confirmation) {
-                    $this->addError($field, "{$label} confirmation does not match.");
-                }
-                break;
-
-            case 'unique_email':
-                // Example custom rule — check DB uniqueness
-                if ($value !== null) {
-                    $db  = Database::getInstance();
-                    $row = $db->getRow('SELECT id FROM users WHERE email = :email', [':email' => $value]);
-                    if ($row) {
-                        $this->addError($field, "{$label} is already registered.");
-                    }
-                }
-                break;
-        }
-    }
-
+    // ─────────────────────────────────────────────────────────────────────────
     private function addError(string $field, string $message): void
     {
-        // Use custom message if provided
-        $key = $field . '.*';
-        $this->errors[$field][] = $this->messages[$key] ?? $message;
-    }
-
-    // ── Result accessors ─────────────────────────────────────────────────────
-    public function passes(): bool
-    {
-        return empty($this->errors);
+        $this->errors[$field][] = $message;
     }
 
     public function fails(): bool
@@ -296,11 +242,16 @@ class Validator
         return $this->errors;
     }
 
-    public function firstError(): string
+    private function tableHasDeletedAt(string $table): bool
     {
-        foreach ($this->errors as $messages) {
-            return $messages[0] ?? '';
-        }
-        return '';
+        static $tables = [
+            'doctors',
+            'patients',
+            'clinics',
+            // add only tables which actually have deleted_at
+        ];
+
+        return in_array($table, $tables, true);
     }
+
 }

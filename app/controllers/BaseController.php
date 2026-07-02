@@ -2,24 +2,13 @@
 
 declare(strict_types=1);
 
-/**
- * BaseController — All controllers extend this class.
- *
- * Provides:
- *   $this->request    — Request instance
- *   $this->db         — Database instance
- *   $this->auth       — Auth instance
- *   $this->authUser   — Decoded JWT payload (null if route has no auth)
- *   $this->validate() — Shorthand validation that auto-returns 422 on failure
- *   $this->input()    — Validated & sanitized input
- */
 abstract class BaseController
 {
-    protected Request    $request;
-    protected Database   $db;
-    protected Auth       $auth;
-    protected Logger     $logger;
-    protected ?array     $authUser;
+    protected Request  $request;
+    protected Database $db;
+    protected Auth     $auth;
+    protected Logger   $logger;
+    protected ?array   $authUser;
 
     public function __construct(Request $request, ?array $authUser = null)
     {
@@ -30,14 +19,7 @@ abstract class BaseController
         $this->authUser = $authUser;
     }
 
-    // ── Validation shorthand ─────────────────────────────────────────────────
-    /**
-     * Validate input against rules. Automatically sends 422 on failure.
-     *
-     * @param  array  $rules    ['field' => 'required|email|min:3']
-     * @param  array|null $data Override data source (defaults to all request input)
-     * @return array  Validated data
-     */
+    // ── VALIDATION ─────────────────────────────────────────
     protected function validate(array $rules, ?array $data = null): array
     {
         $data      = $data ?? $this->request->all();
@@ -50,20 +32,18 @@ abstract class BaseController
         return $data;
     }
 
-    // ── Input helpers ────────────────────────────────────────────────────────
-    /** Get sanitized input value */
+    // ── INPUT ──────────────────────────────────────────────
     protected function input(string $key, mixed $default = null): mixed
     {
         return $this->request->input($key, $default);
     }
 
-    /** Get all sanitized input */
     protected function allInput(): array
     {
         return CommonHelper::sanitizeArray($this->request->all());
     }
 
-    /** Require authenticated user or abort 401 */
+    // ── AUTH ───────────────────────────────────────────────
     protected function requireAuth(): array
     {
         if (!$this->authUser) {
@@ -72,17 +52,14 @@ abstract class BaseController
         return $this->authUser;
     }
 
-    /** Require specific role */
-    protected function requireRole(string ...$roles): array
+    // 👉 NEW: get logged-in doctor id directly
+    protected function doctorId(): int
     {
         $user = $this->requireAuth();
-        if (!in_array($user['role'] ?? '', $roles, true)) {
-            Response::forbidden('You do not have permission to perform this action.');
-        }
-        return $user;
+        return (int) ($user['doctor_id'] ?? 0);
     }
 
-    // ── Pagination helpers ───────────────────────────────────────────────────
+    // ── PAGINATION ─────────────────────────────────────────
     protected function getPage(): int
     {
         return max(1, (int) $this->request->get('page', 1));

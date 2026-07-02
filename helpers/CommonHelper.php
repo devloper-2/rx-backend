@@ -16,6 +16,26 @@ class CommonHelper
         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
 
+    public static function generateApiToken(): string
+    {
+        return bin2hex(random_bytes(32));
+    }
+
+    public static function isValidMobile(string $mobile): bool
+    {
+        return (bool) preg_match('/^\+[0-9]{8,15}$/', $mobile);
+    }
+
+    public static function cleanNulls(array $data): array
+    {
+        return array_filter($data, fn($v) => $v !== null && $v !== '');
+    }
+
+    public static function generateSlugWithId(string $text, int $id): string
+    {
+        return self::slugify($text) . '-' . $id;
+    }
+
     public static function generateOtp(int $length = 6): string
     {
         $max = (int) str_pad('9', $length, '9');
@@ -47,8 +67,13 @@ class CommonHelper
 
     public static function maskPhone(string $phone): string
     {
-        $phone = preg_replace('/\D/', '', $phone);
-        return substr($phone, 0, 2) . str_repeat('*', max(0, strlen($phone) - 4)) . substr($phone, -2);
+        $clean = preg_replace('/\D/', '', $phone);
+
+        if (strlen($clean) <= 4) return $phone;
+
+        return '+' . substr($clean, 0, 2) .
+               str_repeat('*', max(0, strlen($clean) - 4)) .
+            substr($clean, -2);
     }
 
     // ── Array utilities ──────────────────────────────────────────────────────
@@ -121,6 +146,11 @@ class CommonHelper
             'cost' => 10
         ]);
     }
+
+    public static function verifyOtp(string $inputOtp, string $storedOtp): bool
+    {
+        return hash_equals($storedOtp, $inputOtp);
+    }   
 
     public static function verifyPassword(string $password, string $hash): bool
     {

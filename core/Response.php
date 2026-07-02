@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+header('Content-Type: application/json');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+
 /**
  * Response — Standardized JSON API responses.
  *
@@ -80,12 +84,14 @@ class Response
             'message' => $message,
             'data'    => empty($data) ? null : $data,
             'errors'  => empty($errors) ? null : $errors,
-            'meta'    => [
+            'meta' => [
                 'timestamp'  => date('c'),
+                'doctor_id' => self::getDoctorId(),
                 'version'    => Config::get('app.version', 'v1'),
                 'elapsed_ms' => defined('APP_START')
                     ? round((microtime(true) - APP_START) * 1000, 2)
                     : null,
+                'request_id' => self::getRequestId(),
             ],
         ];
 
@@ -96,16 +102,17 @@ class Response
 
         // Log response
         try {
-            Logger::getInstance()->logResponse([
-                'code'    => $code,
-                'status'  => $status,
-                'message' => $message,
-            ]);
+            if (!$status) {
+                Logger::getInstance()->error($message, [
+                    'code'   => $code,
+                    'errors' => $errors,
+                ]);
+            }
         } catch (Throwable) {
             // Never let logging break response
         }
 
-        echo json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        echo json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit();
     }
 
@@ -154,4 +161,32 @@ class Response
     {
         self::send(429, [], $message, false);
     }
+
+
+    private static function getRequestId(): string
+    {
+        static $id = null;
+
+        if ($id === null) {
+            $id = substr(md5(uniqid('', true)), 0, 12);
+        }
+
+        return $id;
+    }
+
+    private static function getDoctorId(): ?int
+    {
+        try {
+            if (!empty($_SERVER['HTTP_AUTHORIZATION'])) {
+                $auth = Auth::getInstance();
+                $user = $auth->getAuthenticatedUser();
+                return $user['doctor_id'] ?? null;
+            }
+        } catch (Throwable $e) {
+            return null;
+        }
+
+        return null;
+    }
+
 }

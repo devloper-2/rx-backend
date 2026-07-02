@@ -1,520 +1,363 @@
 <?php
 //newAuthController.php
-
-/**
- * AuthController — Handles authentication endpoints.
- *
- * POST /auth/register  → register()
- * POST /auth/login     → login()
- */
-
-// check why the email during registration is validating
-
 declare(strict_types=1);
 
-require_once ROOT_PATH . '/app/helpers/MailHelper.php';
 require_once ROOT_PATH . '/app/controllers/BaseController.php';
+require_once ROOT_PATH . '/app/helpers/MailHelper.php';
 
 class NewAuthController extends BaseController
 {
-
-    //  POST /auth/register 
-    public function register(array $params = []): void
-{
-    $data = $this->validate([
-        'name'        => 'required',
-        'password'    => 'required|password_validation',
-        'email'       => 'required|email|unique_email',
-        'countrycode' => 'required|country_code_validation',
-        'phone'       => 'required|phone_validation|unique_phone',
-
-        'degree'      => 'nullable|string',
-        'clinicname'  => 'nullable|string',
-        'address'     => 'nullable|string',
-        'image'       => 'nullable|string',
-    ]);
-
-    try {
-        $this->db->beginTransaction();
-
-        // ✅ INSERT USER FIRST
-        $userId = $this->db->insert('users', [
-            'name'       => $data['name'],
-            'email'      => $data['email'],
-            'password'   => CommonHelper::hashPassword($data['password']),
-            'phone'      => $data['phone'],
-            'countrycode'=> $data['countrycode'],
-            'role'       => 'user',
-            'status'     => 'inactive', // 🔥 IMPORTANT (not active yet)
-            'created_at' => CommonHelper::now(),
-            'degree'     => $data['degree'],
-            'hc_name'    => $data['clinicname'],
-            'hc_address' => $data['address'],
+    // ── REGISTER ─────────────────────────────────────────
+    public function register(): void
+    {
+        $data = $this->validate([
+            'name'     => 'required|min:2|max:100',
+            'email'    => 'required|email|unique:doctors,email',
+            'mobile'   => 'required|mobile|unique:doctors,mobile',
+            'password' => 'required|strong_password',
         ]);
 
-        // ✅ CREATE UPLOAD FOLDER
-        $uploadPath = ROOT_PATH . "/uploads/$userId/";
-        if (!file_exists($uploadPath)) {
-            mkdir($uploadPath, 0777, true);
-        }
-
-        // ✅ SAVE IMAGE
-        if (!empty($data['image'])) {
-            $imageData = base64_decode($data['image']);
-
-            $fileName = $userId . "_" . time() . ".png";
-            file_put_contents($uploadPath . $fileName, $imageData);
-
-            // save path in DB
-            $this->db->update('users', [
-                'avatar' => "uploads/$userId/$fileName"
-            ], 'id = :id', [':id' => $userId]);
-        }
-
-        // ✅ GENERATE OTP
-        $otp = rand(100000, 999999);
-
-        $this->db->update('users', [
-            'otp' => $otp,
-            'otp_expires' => date("Y-m-d H:i:s", strtotime("+5 minutes"))
-        ], 'id = :id', [':id' => $userId]);
-
-        $this->db->commit();
-
-        // ✅ SEND RESPONSE FIRST
-        echo json_encode([
-            "success" => true,
-            "message" => "User registered. OTP sent to email.",
-            "email" => $data['email']
+        $doctorId = $this->db->insert('doctors', [
+            'name'          => $data['name'],
+            'email'         => $data['email'],
+            'mobile'        => $data['mobile'],
+            'password_hash' => CommonHelper::hashPassword($data['password']),
+            'degree'        => $data['degree'] ?? null,
+            'specialization' => $data['specialization'] ?? null,
+            'registration_no' => $data['registration_no'] ?? null,
+            'experience_yrs' => $data['experience_yrs'] ?? null,
+            'plan'          => 'trial',
+            'plan_expires_at' => date('Y-m-d H:i:s', strtotime('+1 month')),
+            'is_active'     => 0,
+            'created_at'    => CommonHelper::now(),
         ]);
 
-        // close response
-        if (function_exists('fastcgi_finish_request')) {
-            fastcgi_finish_request();
-        }
+        // GENERATE OTP FIRST
+        $otp = CommonHelper::generateOtp();
 
-        // ✅ SEND EMAIL
+        // INSERT OTP
+        $this->db->insert('verification', [
+            'doctor_id'   => $doctorId,
+            'otp'         => $otp,
+            'otp_expires' => date('Y-m-d H:i:s', strtotime('+5 minutes')),
+            'type'        => 'email',
+            'send_to'     => $data['email'],
+        ]);
+
+        // SEND EMAIL
         MailHelper::sendRegisterOtpEmail($data['email'], $otp);
 
-        exit;
+        // RESPONSE
+        Response::success([
+            'doctor_id' => $doctorId
+        ], 'OTP sent to email');
 
-    } catch (Throwable $e) {
-        $this->db->rollback();
-        throw $e;
+        if (!$verificationId) {
+            Response::error('OTP generation failed', 500);
+        }
+        
     }
-}
-   
-    
-    // POST /auth/login
-    public function login(array $params = []): void
+
+    // ── VERIFY OTP ────────────────────────────────────────
+    public function verifyOtp(): void
     {
         $data = $this->validate([
-            'name'     => 'required',
-            'password' => 'required',
+            'doctor_id' => 'required|numeric',
+            'otp'       => 'required'
         ]);
 
-        $input = trim($data['name']);
-
-        $conditions = [];
-        $params = [];
-
-        // ✅ enable/disable fields easily
-        $conditions[] = "email = :email";
-        $params[':email'] = $input;
-
-        $conditions[] = "phone = :phone";
-        $params[':phone'] = $input;
-
-        // 👉 if you want name, just add this line
-        // $conditions[] = "name = :name";
-        // $params[':name'] = $input;
-
-        $where = implode(" OR ", $conditions);
-
-        $user = $this->db->getRow(
-            "SELECT id, password, status, role FROM users WHERE $where LIMIT 1",
-            $params
+        $row = $this->db->getRow(
+            "SELECT * FROM verification 
+            WHERE doctor_id = :id 
+            ORDER BY id DESC 
+            LIMIT 1",
+            [':id' => $data['doctor_id']]
         );
 
-        $errors = [];
-
-        if (!$user) {
-            $errors['name'][] = 'User not found';
-        } else {
-            if (!CommonHelper::verifyPassword($data['password'], $user['password'])) {
-                $errors['password'][] = 'Incorrect password';
-            }
+        if (!$row || $row['otp'] !== $data['otp']) {
+            Response::error('Invalid OTP', 400);
         }
 
-        if (!empty($errors)) {
-            echo json_encode([
-                "success" => false,
-                "message" => "Validation Failed",
-                "errors" => $errors ?? []
+        if (strtotime($row['otp_expires']) < time()) {
+            Response::error('OTP expired', 400);
+        }
+
+        $this->db->update('doctors', [
+            'is_active' => 1
+        ], 'id = :id', [':id' => $data['doctor_id']]);
+
+        // delete AFTER success
+        $this->db->executeQuery(
+            "DELETE FROM verification WHERE doctor_id = :id",
+            [':id' => $data['doctor_id']]
+        );
+
+        // AUTO LOGIN AFTER VERIFY
+
+        $accessToken = $this->auth->generateToken([
+            'doctor_id' => (int)$data['doctor_id']
+        ]);
+
+        $refreshToken = $this->auth->generateRefreshToken((int)$data['doctor_id']);
+
+        Response::success([
+            'doctor' => [
+                'id' => $data['doctor_id']
+            ],
+            'access_token'  => $accessToken,
+            'refresh_token' => $refreshToken
+        ], 'Account verified & logged in');
+    }
+
+    // ── LOGIN ─────────────────────────────────────────────
+    public function login(): void
+    {
+            $data = $this->validate([
+                'login'    => 'required',
+                'password' => 'required',
             ]);
-            http_response_code(401);
-            exit;
+
+            $doctor = $this->db->getRow(
+                "SELECT * FROM doctors 
+                WHERE email = :email OR mobile = :mobile",
+                [
+                    ':email'  => $data['login'],
+                    ':mobile' => $data['login']
+                ]
+            );
+
+            if (!$doctor) {
+                Response::error('User not found', 404, [
+                    'field' => 'login'
+                ]);
             }
 
-        /*if ($user['status'] !== 'active') {
-            Response::error('Your account is ' . $user['status'] . '. Please contact support.', 403);
-        }*/
-        if ($user['status'] !== 'active') {
+            if (!CommonHelper::verifyPassword($data['password'], $doctor['password_hash'])) {
+                Response::error('Incorrect password', 401, [
+                    'field' => 'password'
+                ]);
+            }
 
-    // 🔥 GET REAL EMAIL
-    $userFull = $this->db->getRow(
-        "SELECT email FROM users WHERE id = :id",
-        [':id' => $user['id']]
-    );
+            /*if (!(int)$doctor['is_active']) {
+                Response::error('Account not verified', 403);
+            }*/
+           if (!(int)$doctor['is_active']) {
 
-    $userEmail = $userFull['email'];
+                // delete old OTP
+                $this->db->executeQuery(
+                    "DELETE FROM verification WHERE doctor_id = :id",
+                    [':id' => $doctor['id']]
+                );
 
-    // 🔥 GENERATE NEW OTP
-    $otp = rand(100000, 999999);
+                $otp = CommonHelper::generateOtp();
 
-    $this->db->update('users', [
-        'otp' => $otp,
-        'otp_expires' => date("Y-m-d H:i:s", strtotime("+5 minutes"))
-    ], 'id = :id', [':id' => $user['id']]);
+                // save OTP
+                $this->db->insert('verification', [
+                    'doctor_id'   => $doctor['id'],
+                    'otp'         => $otp,
+                    'otp_expires' => date('Y-m-d H:i:s', strtotime('+5 minutes')),
+                    'type'        => 'email',
+                    'send_to'     => $doctor['email'],
+                ]);
 
-    // 🔥 SEND RESPONSE FIRST
-    echo json_encode([
-        "success" => false,
-        "inactive" => true,
-        "message" => "Account not verified. OTP sent again.",
-        "email" => $userEmail
-    ]);
+                // SEND MAIL (IMPORTANT)
+                MailHelper::sendRegisterOtpEmail($doctor['email'], $otp);
 
-    // 🔥 CLOSE RESPONSE
-    if (function_exists('fastcgi_finish_request')) {
-        fastcgi_finish_request();
+                Response::error('Account not verified', 403, [
+                    'doctor_id' => $doctor['id'],
+                    'action'    => 'verify_otp'
+                ]);
+            }
+
+
+            $accessToken = $this->auth->generateToken([
+                'doctor_id' => (int)$doctor['id']
+            ]);
+
+            $refreshToken = $this->auth->generateRefreshToken((int)$doctor['id']);
+
+            Response::success([
+                'doctor' => [
+                    'id'    => $doctor['id'],
+                    'name'  => $doctor['name'],
+                    'email' => $doctor['email']
+                ],
+                'access_token'  => $accessToken,
+                'refresh_token' => $refreshToken,
+            ], 'Login successful');
     }
 
-    // 🔥 SEND EMAIL IN BACKGROUND
-    MailHelper::sendRegisterOtpEmail($userEmail, $otp);
-
-    exit;
-}
-
-        $accessToken  = $this->auth->generateToken(['user_id' => (int) $user['id'], 'role' => $user['role']]);
-        $refreshToken = $this->auth->generateRefreshToken((int) $user['id'], $accessToken);
-
-        
-        //$this->logger->info('User logged in', ['user_id' => $user['id'], 'name' => $user['name']]);
-
-        // update last login // run slow tasks AFTER response
-        $this->db->update('users', ['last_login_at' => CommonHelper::now(), 'updated_at' => CommonHelper::now()], 'id = :id', [':id' => $user['id']]);
-
-        // ✅ REMOVE PASSWORD BEFORE RESPONSE
-        unset($user['password']);
-
-        ob_clean();
-
-        header('Content-Type: application/json');
-        http_response_code(200);
-
-        echo json_encode([
-             "success" => true,
-            'data'    => [
-                'user' => $user,
-                'access_token'  => $accessToken,//can be commenetd
-                'refresh_token' => $refreshToken,// can be commented
-                //'token_type'    => 'Bearer',
-                'expires_in'    => Config::get('jwt.expiry'),// can be commented
-            ]
-        ]);
-        exit;
-    }
-
-
-    // POST /auth/refresh 
-    public function refresh(array $params = []): void
+    // ── LOGOUT ────────────────────────────────────────────
+    public function logout(): void
     {
         $data = $this->validate([
-            'refresh_token' => 'required|string',
+            'refresh_token' => 'required'
         ]);
 
-        try {
-            $result = $this->auth->refreshAccessToken($data['refresh_token']);
-            Response::success(array_merge($result, ['expires_in' => Config::get('jwt.expiry')]), 'Token refreshed');
-        } catch (RuntimeException $e) {
-            Response::error($e->getMessage(), $e->getCode() ?: 401);
+        $updated = $this->db->update(
+            'auth_tokens',
+            ['revoked_at' => CommonHelper::now()],
+            'refresh_token = :token',
+            [':token' => $data['refresh_token']]
+        );
+
+        if ($updated === 0) {
+            Response::error('Invalid token', 400);
         }
-    }
-
-
-    // POST /auth/logout 
-    public function logout(array $params = []): void
-    {
-        $data = $this->validate([
-            'refresh_token' => 'required|string',
-        ]);
-
-        $this->auth->revokeRefreshToken($data['refresh_token']);
-
-        $this->logger->info('User logged out', ['user_id' => $this->authUser['user_id'] ?? null]);
 
         Response::success([], 'Logged out successfully');
     }
 
+    // ── FORGOT PASSWORD ───────────────────────────────────
+    public function forgotPasswordOtp(): void
+    {
 
-
-// POST/auth/forgot-password-otp
-public function forgotPasswordOtp()
-{
-    $data = $this->validate([
-        'email' => 'required|email'
-    ]);
-
-    $user = $this->db->getRow(
-        'SELECT id, email FROM users WHERE email = :email',
-        [':email' => $data['email']]
-    );
-
-    if (!$user) {
-        echo json_encode([
-            "success" => false,
-            "errors" => [
-                "email" => ["Email address not registered"]
-            ]
+        $data = $this->validate([
+            'email' => 'required|email'
         ]);
-        exit;
-    }
 
-    // Generate OTP
-    $otp = rand(100000, 999999);
+        $doctor = $this->db->getRow(
+            "SELECT id FROM doctors WHERE email = :email",
+            [':email' => $data['email']]
+        );
 
-    $this->db->update(
-        'users',
-        [
-            'otp' => $otp,
-            'otp_expires' => date("Y-m-d H:i:s", strtotime("+5 minutes"))
-        ],
-        'id = :id',
-        [':id' => $user['id']]
-    );
+        if (!$doctor) {
+            Response::error('Doctor not found', 404);
+        }
 
-    // 1. Send response FIRST
-echo json_encode([
-    "success" => true,
-    "message" => "OTP generated",
-    "email" => $user['email']
-]);
+        // NOW delete old OTP
+        $this->db->executeQuery(
+            "DELETE FROM verification WHERE doctor_id = :id",
+            [':id' => $doctor['id']]
+        );
 
-// 2. Close response (VERY IMPORTANT)
-if (function_exists('fastcgi_finish_request')) {
-    fastcgi_finish_request();
-}
+        $otp = CommonHelper::generateOtp();
 
-if (empty($user['email'])) {
-    echo json_encode([
-        "success" => false,
-        "message" => "Email not registered for this user"
-    ]);
-    exit;
-}
+        MailHelper::sendResetEmail($data['email'], $otp);
+        
 
-// 3. Send email in background
-MailHelper::sendResetEmail($user['email'], $otp);
-
-exit;
-}
-
-
-
-// POST/auth/reset-password-otp
-public function resetPasswordOtp()
-{
-    $data = $this->validate([
-        //'email' => 'required|email',
-        'email' => 'required|email',
-        'otp' => 'required',
-        'password' => 'required|password_validation'
-    ]);
-
-    $user = $this->db->getRow(
-        'SELECT id, otp, otp_expires FROM users WHERE email = :email',
-        [':email' => $data['email']]
-    );
-
-    if (!$user || $user['otp'] != $data['otp']) {
-        echo json_encode([
-            "success" => false,
-            "errors" => [
-                "otp" => ["Invalid OTP"]
-            ]
+        $this->db->insert('verification', [
+            'doctor_id'   => $doctor['id'],
+            'otp'         => $otp,
+            'otp_expires' => date('Y-m-d H:i:s', strtotime('+5 minutes')),
+            'type'        => 'email',
+            'send_to'     => $data['email'],
         ]);
-        exit;
+
+        Response::success([
+            'doctor_id' => $doctor['id']
+        ], 'OTP sent to email');
     }
 
-    if (strtotime($user['otp_expires']) < time()) {
-        echo json_encode([
-            "success" => false,
-            "errors" => [
-                "otp" => ["OTP expired"]
-            ]
+    // ── RESET PASSWORD ────────────────────────────────────
+    public function resetPasswordOtp(): void
+    {
+        $data = $this->validate([
+            'doctor_id' => 'required',
+            'otp'       => 'required',
+            'password'  => 'required|strong_password'
         ]);
-        exit;
+
+        $row = $this->db->getRow(
+            "SELECT * FROM verification 
+            WHERE doctor_id = :id 
+            ORDER BY id DESC 
+            LIMIT 1",
+            [':id' => $data['doctor_id']]
+        );
+
+        if (!$row || $row['otp'] !== $data['otp']) {
+            Response::error('Invalid OTP', 400);
+        }
+
+        // check expiry manually (PHP side)
+        if (strtotime($row['otp_expires']) < time()) {
+            Response::error('OTP expired', 400);
+        }
+
+        $this->db->update('doctors', [
+            'password_hash' => CommonHelper::hashPassword($data['password'])
+        ], 'id = :id', [':id' => $data['doctor_id']]);
+
+        // DELETE OTP after success
+        $this->db->executeQuery(
+            "DELETE FROM verification WHERE doctor_id = :id",
+            [':id' => $data['doctor_id']]
+        );
+
+        Response::success([], 'Password reset successful');
     }
 
-    $this->db->update(
-        'users',
-        [
-            'password' => CommonHelper::hashPassword($data['password']),
-            'otp' => null,
-            'otp_expires' => null
-        ],
-        'id = :id',
-        [':id' => $user['id']]
-    );
-
-    echo json_encode([
-        "success" => true,
-        "message" => "Password updated"
-    ]);
-    exit;
-}
-
-// Verify details while registration
-public function verifyOtp()
-{
-    $data = $this->validate([
-        'email' => 'required|email',
-        'otp'   => 'required'
-    ]);
-
-    $user = $this->db->getRow(
-        'SELECT id, otp, otp_expires FROM users WHERE email = :email',
-        [':email' => $data['email']]
-    );
-
-    if (!$user || $user['otp'] != $data['otp']) {
-        echo json_encode([
-            "success" => false,
-            "errors" => [
-                "otp" => ["Invalid OTP"]
-            ]
+    // ── RESET OTP ────────────────────────────────────
+    public function resendOtp(): void
+    {
+        $data = $this->validate([
+            'doctor_id' => 'required|numeric'
         ]);
-        exit;
-    }
 
-    if (strtotime($user['otp_expires']) < time()) {
-        echo json_encode([
-            "success" => false,
-            "errors" => [
-                "otp" => ["OTP expired"]
-            ]
+        $doctor = $this->db->getRow(
+            "SELECT email FROM doctors WHERE id = :id",
+            [':id' => $data['doctor_id']]
+        );
+
+        if (!$doctor) {
+            Response::error('Doctor not found', 404);
+        }
+
+        $this->db->executeQuery(
+            "DELETE FROM verification WHERE doctor_id = :id",
+            [':id' => $data['doctor_id']]
+        );
+
+        $otp = CommonHelper::generateOtp();
+
+        MailHelper::sendRegisterOtpEmail($doctor['email'], $otp);
+
+        $this->db->insert('verification', [
+            'doctor_id'   => $data['doctor_id'],
+            'otp'         => $otp,
+            'otp_expires' => date('Y-m-d H:i:s', strtotime('+5 minutes')),
+            'type'        => 'email',
+            'send_to'     => $doctor['email'],
         ]);
-        exit;
+
+        Response::success([], 'OTP resent');
     }
 
-    // ✅ ACTIVATE USER
-    $this->db->update('users', [
-        'status' => 'active',
-        'otp' => null,
-        'otp_expires' => null
-    ], 'id = :id', [':id' => $user['id']]);
-
-    echo json_encode([
-        "success" => true,
-        "message" => "Account verified Successfully"
-    ]);
-    exit;
-}
-
-// resend otp to verify details while registration
-public function resendOtp()
-{
-    $data = $this->validate([
-        'email' => 'required|email'
-    ]);
-
-    $user = $this->db->getRow(
-        'SELECT id FROM users WHERE email = :email',
-        [':email' => $data['email']]
-    );
-
-    if (!$user) {
-        echo json_encode([
-            "success" => false,
-            "message" => "User not found"
+    // ── CHECK EMAIL ────────────────────────────────────
+    public function checkEmail(): void
+    {
+        $data = $this->validate([
+            'email' => 'required|email'
         ]);
-        exit;
+
+        $exists = $this->db->getRow(
+            "SELECT id FROM doctors WHERE email = :email",
+            [':email' => $data['email']]
+        );
+
+        Response::success([
+            'exists' => $exists ? true : false
+        ]);
     }
 
-    //  generate NEW OTP
-    $otp = rand(100000, 999999);
+    // ── CHECK PHONE ────────────────────────────────────
+    public function checkPhone(): void
+    {
+        $data = $this->validate([
+            'phone' => 'required',
+            'countrycode' => 'required'
+        ]);
 
-    //  overwrite old OTP (auto expire old)
-    $this->db->update('users', [
-        'otp' => $otp,
-        'otp_expires' => date("Y-m-d H:i:s", strtotime("+5 minutes"))
-    ], 'id = :id', [':id' => $user['id']]);
+        $fullPhone = $data['countrycode'] . $data['phone'];
 
-    echo json_encode([
-        "success" => true,
-        "message" => "OTP resent"
-    ]);
+        $exists = $this->db->getRow(
+            "SELECT id FROM doctors WHERE mobile = :mobile",
+            [':mobile' => $fullPhone]
+        );
 
-    if (function_exists('fastcgi_finish_request')) {
-        fastcgi_finish_request();
+        Response::success([
+            'exists' => $exists ? true : false
+        ]);
     }
-
-    // for resend who register first time
-    MailHelper::sendRegisterOtpEmail($data['email'], $otp);
-    // for inactive resend password
-    MailHelper::sendResetEmail($data['email'], $otp);//MailHelper::sendResetEmail($email, $otp); 
-
-    exit;
-}
-
-// check phone number is present during first page register
-public function checkPhone()
-{
-    $data = json_decode(file_get_contents("php://input"), true);
-
-    $phone = $data['phone'] ?? null;
-
-    if (!$phone) {
-        echo json_encode(["success" => false, "message" => "Phone required"]);
-        return;
-    }
-
-    $user = $this->db->getRow(
-        "SELECT id FROM users WHERE phone = :phone",
-        [':phone' => $phone]
-    );
-
-    echo json_encode([
-        "success" => true,
-        "data" => [
-            "exists" => $user ? true : false
-        ]
-    ]);
-}
-
-// check email is present during first page register
-public function checkEmail()
-{
-    $data = json_decode(file_get_contents("php://input"), true);
-
-    $email = $data['email'] ?? null;
-
-    if (!$email) {
-        echo json_encode(["success" => false, "message" => "Email required"]);
-        return;
-    }
-
-    $user = $this->db->getRow(
-        "SELECT id FROM users WHERE email = :email",
-        [':email' => $email]
-    );
-
-    echo json_encode([
-        "success" => true,
-        "data" => [
-            "exists" => $user ? true : false
-        ]
-    ]);
-}
 }

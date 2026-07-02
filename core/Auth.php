@@ -41,7 +41,7 @@ class Auth
     // ── Token generation ─────────────────────────────────────────────────────
     /**
      * Generate an access JWT.
-     * @param  array $payload Extra claims to embed (e.g. ['user_id' => 1, 'role' => 'admin'])
+     * @param  array $payload Extra claims to embed (e.g. [''doctor_id'' => 1])
      */
     public function generateToken(array $payload): string
     {
@@ -100,19 +100,31 @@ class Auth
     }
 
     // ── Refresh tokens ───────────────────────────────────────────────────────
+    // according to new db
     /**
      * Generate a refresh token, persist it in the DB.
      */
-    public function generateRefreshToken(int $userId): string
+    public function generateRefreshToken(int $doctorId): string
     {
         $token     = bin2hex(random_bytes(40));
         $expiresAt = date('Y-m-d H:i:s', time() + $this->refreshExpiry);
 
-        $this->db->insert('refresh_tokens', [
-            'user_id'    => $userId,
-            'token'      => hash('sha256', $token),
-            'expires_at' => $expiresAt,
-            'created_at' => date('Y-m-d H:i:s'),
+        //Only one login allowed at a time
+        $this->db->executeQuery(
+            "DELETE FROM auth_tokens WHERE doctor_id = :id",
+            [':id' => $doctorId]
+        );
+
+        $this->db->insert('auth_tokens', [
+            'doctor_id'     => $doctorId,
+            'refresh_token' => $token, // correct
+            'device_info'   => json_encode([
+                'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
+                'platform'   => php_uname(),
+            ]),
+            'ip_address'    => $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
+            'expires_at'    => $expiresAt, // REQUIRED
+            'created_at'    => date('Y-m-d H:i:s'),
         ]);
 
         return $token;
@@ -122,15 +134,15 @@ class Auth
      * Exchange a valid refresh token for a new access token.
      * @throws RuntimeException on invalid / expired refresh token
      */
+    // according to new db
     public function refreshAccessToken(string $refreshToken): array
     {
-        $hashed = hash('sha256', $refreshToken);
-        $row    = $this->db->getRow(
-            'SELECT rt.*, u.id AS user_id, u.role, u.status
-             FROM refresh_tokens rt
-             JOIN users u ON u.id = rt.user_id
-             WHERE rt.token = :token AND rt.revoked = 0',
-            [':token' => $hashed]
+        $row = $this->db->getRow(
+            'SELECT at.*, d.id AS doctor_id, d.is_active
+            FROM auth_tokens at
+            JOIN doctors d ON d.id = at.doctor_id
+            WHERE at.refresh_token = :token AND at.revoked_at IS NULL',
+            [':token' => $refreshToken]
         );
 
         if (!$row) {
@@ -141,28 +153,31 @@ class Auth
             throw new RuntimeException('Refresh token expired', 401);
         }
 
-        if ($row['status'] !== 'active') {
-            throw new RuntimeException('Account is not active', 403);
+        if (!$row['is_active']) {
+            throw new RuntimeException('Account is inactive', 403);
         }
 
         $accessToken = $this->generateToken([
-            'user_id' => (int) $row['user_id'],
-            'role'    => $row['role'],
+            'doctor_id' => (int) $row['doctor_id'],
         ]);
 
-        return ['access_token' => $accessToken, 'token_type' => 'Bearer'];
+        return [
+            'access_token' => $accessToken,
+            'token_type'   => 'Bearer'
+        ];
     }
 
     /** Revoke a refresh token (logout). */
+    // according to new db
     public function revokeRefreshToken(string $refreshToken): bool
     {
-        $hashed  = hash('sha256', $refreshToken);
         $updated = $this->db->update(
-            'refresh_tokens',
-            ['revoked' => 1],
-            'token = :token',
-            [':token' => $hashed]
+            'auth_tokens',
+            ['revoked_at' => date('Y-m-d H:i:s')],
+            'refresh_token = :token',
+            [':token' => $refreshToken]
         );
+
         return $updated > 0;
     }
 

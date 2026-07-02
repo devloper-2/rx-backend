@@ -1,0 +1,2 @@
+{"timestamp":"2026-06-12 05:05:12","level":"ERROR","message":"Route 'auth/check-phone' not found.","context":{"code":404,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/auth/check-phone","method":"POST","request_id":"2ec34169c60a"}
+{"timestamp":"2026-06-12 05:06:02","level":"ERROR","message":"Route 'auth/check-email' not found.","context":{"code":404,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/auth/check-email","method":"POST","request_id":"e0a0f8a9007b"}

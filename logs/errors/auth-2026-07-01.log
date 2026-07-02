@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-01 06:10:53","level":"ERROR","message":"Authorization header missing","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/patient/search","method":"POST","request_id":"d1e3a24ba595"}
+{"timestamp":"2026-07-01 06:31:57","level":"ERROR","message":"Authorization header missing","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/patient/search","method":"POST","request_id":"e870e743741e"}
+{"timestamp":"2026-07-01 06:48:47","level":"ERROR","message":"Authorization header missing","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/patient/search","method":"POST","request_id":"ee9ee72300d9"}
+{"timestamp":"2026-07-01 06:50:39","level":"ERROR","message":"Authorization header missing","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/medicine/search","method":"POST","request_id":"4687a2cc08f0"}

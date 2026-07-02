@@ -42,7 +42,9 @@ class RateLimit
     public function check(string $endpoint, int $max, int $window): void
     {
         $ip        = $this->getClientIp();
-        $key       = md5($endpoint . '|' . $ip);
+        $doctorId = $this->getDoctorId() ?? null;
+        $keyBase  = $doctorId ? "doctor:{$doctorId}" : "ip:{$ip}";
+        $key      = md5($endpoint . '|' . $keyBase);
         $windowStart = date('Y-m-d H:i:s', time() - $window);
 
         // Purge old entries (housekeeping — 1% chance per request)
@@ -52,15 +54,16 @@ class RateLimit
 
         // Count existing hits in this window
         $row = $this->db->getRow(
-            'SELECT hits, window_start FROM rate_limits WHERE `key` = :key',
-            [':key' => $key]
+            'SELECT hits, window_start FROM rate_limits WHERE `key` = :key AND doctor_id <=> :doctor_id',
+            [':key' => $key, ':doctor_id' => $doctorId]
         );
 
         if (!$row) {
             // First request — insert fresh counter
             $this->db->insert('rate_limits', [
+                'doctor_id'    => $doctorId,
                 'key'          => $key,
-                'endpoint'     => $endpoint,
+                'endpoints'    => $endpoint,
                 'ip'           => $ip,
                 'hits'         => 1,
                 'window_start' => date('Y-m-d H:i:s'),
@@ -78,8 +81,11 @@ class RateLimit
                     'window_start' => date('Y-m-d H:i:s'),
                     'updated_at'   => date('Y-m-d H:i:s'),
                 ],
-                '`key` = :key',
-                [':key' => $key]
+                '`key` = :key AND doctor_id <=> :doctor_id',
+                [
+                    ':key' => $key,
+                    ':doctor_id' => $doctorId
+                ]
             );
             return;
         }
@@ -90,12 +96,12 @@ class RateLimit
             $resetAt  = strtotime($row['window_start']) + $window;
             $retryAfter = max(0, $resetAt - time());
 
-            $this->logger->warning('Rate limit exceeded', [
-                'ip'         => $ip,
-                'endpoint'   => $endpoint,
-                'hits'       => $hits,
-                'max'        => $max,
-                'retry_after'=> $retryAfter,
+           $this->logger->warning('Rate limit exceeded', [
+                'doctor_id' => $doctorId,
+                'ip'        => $ip,
+                'endpoint'  => $endpoint,
+                'hits'      => $hits,
+                'max'       => $max,
             ]);
 
             header('Retry-After: ' . $retryAfter);
@@ -111,8 +117,8 @@ class RateLimit
 
         // Increment counter
         $this->db->executeQuery(
-            'UPDATE rate_limits SET hits = hits + 1, updated_at = :now WHERE `key` = :key',
-            [':now' => date('Y-m-d H:i:s'), ':key' => $key]
+            'UPDATE rate_limits SET hits = hits + 1, updated_at = :now WHERE `key` = :key AND doctor_id <=> :doctor_id',
+            [':now' => date('Y-m-d H:i:s'), ':key' => $key, ':doctor_id' => $doctorId]
         );
 
         $remaining = $max - $hits - 1;
@@ -122,6 +128,22 @@ class RateLimit
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private function getDoctorId(): ?int
+    {
+        try {
+            if (!empty($_SERVER['HTTP_AUTHORIZATION'])) {
+                $auth = Auth::getInstance();
+                $user = $auth->getAuthenticatedUser();
+                return $user['doctor_id'] ?? null;
+            }
+        } catch (Throwable $e) {
+            return null;
+        }
+
+        return null;
+    }
+
     private function getClientIp(): string
     {
         $candidates = [

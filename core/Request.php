@@ -148,7 +148,8 @@ class Request
     public function toLogArray(): array
     {
         $sensitive = ['password', 'password_confirmation', 'token', 'secret', 'card_number', 'cvv'];
-        $data      = $this->all();
+        //$data      = $this->all();
+        $data = CommonHelper::sanitizeArray($this->all());
 
         foreach ($sensitive as $key) {
             if (array_key_exists($key, $data)) {
@@ -159,11 +160,63 @@ class Request
         return [
             'method'  => $this->method,
             'uri'     => $this->uri,
-            'ip'      => $_SERVER['REMOTE_ADDR'] ?? null,
+            'ip' => $this->getClientIp(),
             'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null,
             'params'  => $data,
             'files'   => array_keys($this->files),
         ];
+    }
+
+
+    public function doctorId(): ?int
+    {
+        try {
+            $token = $this->bearerToken();
+            if ($token) {
+                $auth = Auth::getInstance();
+                $user = $auth->validateToken($token);
+                return $user['doctor_id'] ?? null;
+            }
+        } catch (Throwable $e) {
+            return null;
+        }
+
+        return null;
+    }
+
+
+    private function getClientIp(): string
+    {
+        $keys = [
+            'HTTP_CLIENT_IP',
+            'HTTP_X_FORWARDED_FOR',
+            'REMOTE_ADDR'
+        ];
+
+        foreach ($keys as $key) {
+            if (!empty($_SERVER[$key])) {
+                return trim(explode(',', $_SERVER[$key])[0]);
+            }
+        }
+
+        return '0.0.0.0';
+    }
+
+    public function requestId(): string
+    {
+        static $id = null;
+
+        if ($id === null) {
+            $id = substr(md5(uniqid('', true)), 0, 12);
+        }
+
+        return $id;
+    }
+
+
+    public function isAuthenticated(): bool
+    {
+        return $this->doctorId() !== null;
     }
 
     private function __clone() {}

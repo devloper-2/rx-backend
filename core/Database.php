@@ -1,5 +1,5 @@
 <?php
-
+//database.php
 declare(strict_types=1);
 
 /**
@@ -112,6 +112,12 @@ class Database
         $stmt = $this->executeQuery($sql, $params);
         $row  = $stmt->fetch();
         return $row === false ? null : $row;
+
+        //get from PrescribeControlle
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+
     }
 
     /** Returns all rows as array of arrays. */
@@ -119,6 +125,12 @@ class Database
     {
         $stmt = $this->executeQuery($sql, $params);
         return $stmt->fetchAll();
+
+        //get from PrescribeController.php
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     }
 
     // ── DML helpers ──────────────────────────────────────────────────────────
@@ -170,11 +182,18 @@ class Database
      * @param  array  $whereParams [':id' => 1]
      * @return int    Affected rows
      */
-    public function delete(string $table, string $where, array $whereParams = []): int
+    public function softDelete(string $table, string $where, array $params = []): int
     {
-        $sql = "DELETE FROM `{$table}` WHERE {$where}";
-        $this->executeQuery($sql, $whereParams);
+        $sql = "UPDATE `{$table}` SET deleted_at = NOW() WHERE {$where}";
+        $this->executeQuery($sql, $params);
         return $this->rowCount();
+    }
+
+    // Exists check
+    public function exists(string $table, string $where, array $params = []): bool
+    {
+        $row = $this->getRow("SELECT 1 FROM `{$table}` WHERE {$where} LIMIT 1", $params);
+        return $row !== null;
     }
 
     // ── Row count ────────────────────────────────────────────────────────────
@@ -224,6 +243,7 @@ class Database
             ],
         ];
     }
+
 
     // ── Transactions ─────────────────────────────────────────────────────────
     public function beginTransaction(): void

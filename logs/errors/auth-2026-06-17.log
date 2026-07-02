@@ -1,0 +1,6 @@
+{"timestamp":"2026-06-17 05:16:50","level":"ERROR","message":"Token has expired","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/prescription/create","method":"POST","request_id":"57a3dd1de347"}
+{"timestamp":"2026-06-17 07:18:01","level":"ERROR","message":"Token has expired","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/prescription/create","method":"POST","request_id":"c765a84c0433"}
+{"timestamp":"2026-06-17 09:59:07","level":"ERROR","message":"Invalid Authorization header format","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/prescription/get/8","method":"GET","request_id":"651f65da9904"}
+{"timestamp":"2026-06-17 10:26:36","level":"ERROR","message":"Token has expired","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/prescription/create","method":"POST","request_id":"b964db8ac34e"}
+{"timestamp":"2026-06-17 11:03:33","level":"ERROR","message":"Token has expired","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/prescription/get/9","method":"GET","request_id":"85f850d5fd29"}
+{"timestamp":"2026-06-17 11:51:48","level":"ERROR","message":"Token has expired","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/prescription/create","method":"POST","request_id":"a4935a81af2f"}

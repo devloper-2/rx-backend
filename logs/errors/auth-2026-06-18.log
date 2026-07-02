@@ -1,0 +1,3 @@
+{"timestamp":"2026-06-18 05:14:40","level":"ERROR","message":"Token has expired","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/prescription/create","method":"POST","request_id":"2b0b2133820e"}
+{"timestamp":"2026-06-18 12:40:54","level":"ERROR","message":"Token has expired","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/prescription/get/11","method":"GET","request_id":"959642cf8f7b"}
+{"timestamp":"2026-06-18 12:48:12","level":"ERROR","message":"Action 'refresh' not found in NewAuthController","context":{"code":404,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/auth/refresh","method":"POST","request_id":"7087900ccca6"}

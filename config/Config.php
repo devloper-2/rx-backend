@@ -29,12 +29,20 @@ class Config
                 'pass'    => '',
                 'charset' => 'utf8mb4',
             ],
+            'mail' => [
+                'host'       => 'smtp.gmail.com',
+                'port'       => 587,
+                'username'   => 'vedanshuonwork@gmail.com',
+                'password'   => 'onyp kirv hndr nnaw',
+                'from_email' => 'vedanshuonwork@gmail.com',
+                'from_name'  => 'PrescriptionRx',
+            ],
             'jwt' => [
                 //'secret'          => 'LOCAL_SECRET_CHANGE_THIS_32CHARS!!',
                 'secret'          => 'abcdefghijklmnopqrstuvwxyz',
                 'algo'            => 'HS256',
-                'expiry'          => 3600,        // 1 hour (seconds)
-                'refresh_expiry'  => 604800,      // 7 days
+                'expiry'          => 3600,        // 1 hour (seconds) access_tokens
+                'refresh_expiry'  => 604800,      // 7 days   refresh_tokens
             ],
             'upload' => [
                 'max_size'      => 5242880,   // 5 MB
@@ -55,6 +63,7 @@ class Config
         // ── PRODUCTION ──────────────────────────────────────────────────────
         'production' => [
             'app' => [
+                'app_name' => 'RX Backend',
                 'debug'    => false,
                 'timezone' => 'UTC',
                 'base_url' => 'https://yourdomain.com',
@@ -63,14 +72,15 @@ class Config
             'db' => [
                 'host'    => 'localhost',
                 'port'    => 3306,
-                'name'    => 'your_prod_db',
-                'user'    => 'your_prod_user',
-                'pass'    => 'your_prod_password',
+                'name'    => 'php_rest_api',
+                'user'    => 'root',
+                'pass'    => '',
                 'charset' => 'utf8mb4',
             ],
             'jwt' => [
                 'secret'          => 'PRODUCTION_SECRET_REPLACE_WITH_STRONG_KEY!!',
                 'algo'            => 'HS256',
+                'type' => 'doctor',
                 'expiry'          => 3600,
                 'refresh_expiry'  => 604800,
             ],

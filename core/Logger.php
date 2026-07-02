@@ -64,6 +64,9 @@ class Logger
 
     public function error(string $message, array $context = []): void
     {
+        if (str_contains(strtolower($message), 'token') || str_contains(strtolower($message), 'auth')) {
+            $this->writeToFile('errors/auth-' . date('Y-m-d'), $this->format('error', $message, $context));
+        }
         $this->write('error', $message, $context);
         $this->writeToFile('errors/' . date('Y-m-d'), $this->format('error', $message, $context));
     }
@@ -100,9 +103,28 @@ class Logger
             'level'     => strtoupper($level),
             'message'   => $message,
             'context'   => $context,
+            'doctor_id' => $this->getDoctorId(),
+            'endpoint'  => $_SERVER['REQUEST_URI'] ?? '',
+            'method'    => $_SERVER['REQUEST_METHOD'] ?? '',
             'request_id'=> $this->getRequestId(),
         ];
         return json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
+    }
+
+
+    private function getDoctorId(): ?int
+    {
+        try {
+            if (!empty($_SERVER['HTTP_AUTHORIZATION'])) {
+                $auth = Auth::getInstance();
+                $user = $auth->getAuthenticatedUser();
+                return $user['doctor_id'] ?? null;
+            }
+        } catch (Throwable $e) {
+            return null;
+        }
+
+        return null;
     }
 
     private function writeToFile(string $filename, string $line): void

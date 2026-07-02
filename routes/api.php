@@ -3,159 +3,149 @@
 declare(strict_types=1);
 
 /**
- * API Routes
- * ----------
- * Pattern: $router->{method}('{controller}/{action}', 'ControllerName', 'actionMethod', $options)
- *
- * Options:
- *   'auth'       => true   — Require valid JWT token
- *   'rate_limit' => ['max' => N, 'window' => seconds]
- *
- * URL examples:
- *   POST domain.com/auth/login
- *   GET  domain.com/user/list
- *   GET  domain.com/user/detail/42   (42 = {id} URL param)
+ * CLEAN API ROUTES (DOCTOR SYSTEM)
  */
+            // http://localhost/rx-backend/auth/reset-password
+            // pass:: Test@123   and   NewPass@123
+// ─────────────────────────────────────────
+// AUTH ROUTES 
+// ─────────────────────────────────────────
 
-/** @var \Laravel\Lumen\Routing\Router $router */
-
-
-
-
-// new auth route for testing 
-// url will be http://localhost/rx-backend/auth/
-
-//api.php
-// for register
 $router->post(
-    'auth/register-new',
-    'NewAuth', 'register',
-    ['rate_limit' => ['max' => 90, 'window' => 7 * 24 * 60 * 60]]  // 90 registrations/ week IP
+    'auth/register',
+    'NewAuth',
+    'register',
+    ['rate_limit' => ['max' => 500, 'window' => 3600 * 24 * 30]] // 500 per month
 );
 
-// for login
 $router->post(
-    'auth/login-new',
-    'NewAuth', 'login',
-    ['rate_limit' => ['max' => 90, 'window' => 7 * 24 * 60 * 60]]  // 90 login attempts/ week IP
+    'auth/login',
+    'NewAuth',
+    'login',
+    ['rate_limit' => ['max' => 100, 'window' => 3600 * 24 * 60]] // 100 per month 
 );
 
-// for logout
-$router->post(
-    'auth/logout-new',
-    'NewAuth', 'logout'
-);
-
-// for forgot password new
-$router->post(
-    'auth/forgot-password-otp', 
-    'NewAuth', 
-    'forgotPasswordOtp'
-);
-
-// for reset password new
-$router->post(
-    'auth/reset-password-otp', 
-    'NewAuth', 
-    'resetPasswordOtp'
-);
-
-// for verify the details while registering then login
 $router->post(
     'auth/verify-otp',
     'NewAuth',
     'verifyOtp'
 );
 
-// resend otp for verify details while registering login
 $router->post(
-    'auth/resend-otp',
+    'auth/forgot-password',
     'NewAuth',
+    'forgotPasswordOtp'
+);
+
+$router->post(
+    'auth/reset-password',
+    'NewAuth',
+    'resetPasswordOtp'
+);
+
+$router->post(
+    'auth/resend-otp', 
+    'NewAuth', 
     'resendOtp'
 );
 
-// check phone number present in first page register
 $router->post(
-    'auth/check-phone',
-    'NewAuth', 
-    'checkPhone'
-);
-
-// check email present in first page register
-$router->post(
-    'auth/check-email',
+    'auth/check-email', 
     'NewAuth', 
     'checkEmail'
 );
 
-// ====================== ABOVE ALL API ARE FOR TESTING ======================== //
-
-
-// ── Auth routes (no JWT required) ────────────────────────────────────────────
 $router->post(
-    'auth/register',
-    'Auth', 'register',
-    ['rate_limit' => ['max' => 3, 'window' => 3600]]  // 3 registrations/hr per IP
+    'auth/check-phone', 
+    'NewAuth', 
+    'checkPhone'
 );
 
-$router->post(
-    'auth/login',
-    'Auth', 'login',
-    ['rate_limit' => ['max' => 5, 'window' => 3600]]  // 5 login attempts/hr per IP
-);
 
-$router->post(
-    'auth/refresh',
-    'Auth', 'refresh',
-    ['rate_limit' => ['max' => 10, 'window' => 3600]]
-);
+// ─────────────────────────────────────────
+// AUTH REQUIRED ROUTES
+// ─────────────────────────────────────────
 
-// ── Auth routes (JWT required) ────────────────────────────────────────────────
 $router->post(
     'auth/logout',
-    'Auth', 'logout',
+    'NewAuth',
+    'logout',
     ['auth' => true]
 );
 
 $router->get(
     'auth/me',
-    'Auth', 'me',
-    ['auth' => true, 'rate_limit' => ['max' => 30, 'window' => 3600]]
-);
-
-// ── User routes (JWT required) ────────────────────────────────────────────────
-$router->get(
-    'user/list',
-    'User', 'list',
-    ['auth' => true, 'rate_limit' => ['max' => 15, 'window' => 3600]]
-);
-
-$router->get(
-    'user/detail/{id}',
-    'User', 'detail',
-    ['auth' => true, 'rate_limit' => ['max' => 30, 'window' => 3600]]
-);
-
-$router->put(
-    'user/update/{id}',
-    'User', 'update',
-    ['auth' => true, 'rate_limit' => ['max' => 10, 'window' => 3600]]
-);
-
-$router->delete(
-    'user/delete/{id}',
-    'User', 'delete',
-    ['auth' => true, 'rate_limit' => ['max' => 5, 'window' => 3600]]
+    'User',
+    'detail',
+    ['auth' => true]
 );
 
 $router->post(
-    'user/upload-avatar',
-    'User', 'uploadAvatar',
-    ['auth' => true, 'rate_limit' => ['max' => 5, 'window' => 3600]]
+    'auth/refresh',
+    'NewAuth',
+    'refresh'
 );
 
-$router->put(
-    'user/change-password',
-    'User', 'changePassword',
-    ['auth' => true, 'rate_limit' => ['max' => 3, 'window' => 3600]]
+// ─────────────────────────────────────────
+// PRESCRIPTION ROUTES
+// ─────────────────────────────────────────
+
+$router->post(
+    'prescription/create',
+    'Prescribe',   
+    'create',
+    ['auth' => true]
 );
+
+$router->get(
+    'prescription/get/{id}',
+    'Prescribe',
+    'get',
+    ['auth' => true]
+);
+
+$router->delete(
+    'prescription/delete/{id}',
+    'Prescribe',
+    'delete',
+    ['auth' => true]
+);
+
+$router->post(
+    'patient/search',
+    'Prescribe',
+    'searchPatients',
+    ['auth'=>true]
+);
+
+$router->post(
+    'medicine/search',
+    'Prescribe',
+    'searchMedicines',
+    ['auth'=>true]
+);
+
+$router->post(
+    'symptoms/search',
+    'Prescribe',
+    'searchSymptoms',
+    ['auth'=>true]
+);
+
+$router->get(
+    'clinic/list',
+    'Prescribe',
+    'getClinics',
+    ['auth'=>true]
+);
+
+$router->post(
+    'advice/search',
+    'Prescribe',
+    'searchAdvice',
+    ['auth'=>true]
+);
+
+
+
+?>

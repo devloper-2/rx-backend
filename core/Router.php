@@ -83,7 +83,10 @@ class Router
         $uri    = trim($this->request->uri(), '/');
 
         // Log every incoming request
-        $this->logger->logRequest($this->request->toLogArray());
+        $this->logger->logRequest(array_merge(
+            $this->request->toLogArray(),
+            ['request_id' => $this->request->requestId()]
+        ));
 
         // ── Match route ──────────────────────────────────────────────────────
         $route      = null;
@@ -124,22 +127,25 @@ class Router
         if (!empty($route['rate_limit'])) {
             try {
                 $rl = RateLimit::getInstance();
-                $rl->check($uri, $route['rate_limit']['max'], $route['rate_limit']['window']);
+                $rl->check(
+                    $route['controller'] . '/' . $route['action'],
+                    $route['rate_limit']['max'],
+                    $route['rate_limit']['window']
+                );
             } catch (RuntimeException $e) {
                 $code = $e->getCode() ?: 429;
-                Response::send($code, [], $e->getMessage(), false);
+                Response::error($e->getMessage(), $e->getCode() ?: 500);
             }
         }
 
         // ── JWT authentication ───────────────────────────────────────────────
         $authUser = null;
-        if ($route['auth']) {
+
+        if (!empty($route['auth'])) {
             try {
-                $auth     = Auth::getInstance();
-                $authUser = $auth->getAuthenticatedUser();
+                $authUser = Auth::getInstance()->getAuthenticatedUser();
             } catch (RuntimeException $e) {
-                $code = $e->getCode() ?: 401;
-                Response::send($code, [], $e->getMessage(), false);
+                Response::error($e->getMessage(), 401);
             }
         }
 
@@ -165,9 +171,16 @@ class Router
             Response::error("Action '{$action}' not found in {$controllerName}", 404);
         }
 
+        $this->logger->info('Controller execution', [
+            'controller' => $controllerName,
+            'action'     => $action,
+            'params'     => $urlParams,
+        ]);
+
         // ── Call action ──────────────────────────────────────────────────────
         try {
             $controller->$action($urlParams);
+            return; // ✅ STOP execution here
         } catch (RuntimeException $e) {
             $code = $e->getCode() ?: 500;
             $this->logger->error('Controller action failed', [
@@ -175,7 +188,8 @@ class Router
                 'action'     => $action,
                 'error'      => $e->getMessage(),
             ]);
-            Response::send($code, [], $e->getMessage(), false);
+            //Response::unauthorized($e->getMessage());
+            Response::error($e->getMessage(), $e->getCode() ?: 500);
         } catch (Throwable $e) {
             $this->logger->error('Unexpected error', [
                 'controller' => $controllerName,

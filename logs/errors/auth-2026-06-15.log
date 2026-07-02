@@ -1,0 +1,3 @@
+{"timestamp":"2026-06-15 04:40:34","level":"ERROR","message":"Route 'auth/check-phone' not found.","context":{"code":404,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/auth/check-phone","method":"POST","request_id":"ab82560459a4"}
+{"timestamp":"2026-06-15 04:40:42","level":"ERROR","message":"Route 'auth/check-email' not found.","context":{"code":404,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/auth/check-email","method":"POST","request_id":"75bdf7036a07"}
+{"timestamp":"2026-06-15 06:16:27","level":"ERROR","message":"Token has expired","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/auth/logout","method":"POST","request_id":"2678a609c5c7"}

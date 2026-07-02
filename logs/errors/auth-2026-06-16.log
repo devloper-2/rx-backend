@@ -1,0 +1,5 @@
+{"timestamp":"2026-06-16 11:09:30","level":"ERROR","message":"Invalid token format","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/prescription/create","method":"POST","request_id":"1fe4cd7062a4"}
+{"timestamp":"2026-06-16 11:09:47","level":"ERROR","message":"Invalid Authorization header format","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/prescription/create","method":"POST","request_id":"83fe554c4931"}
+{"timestamp":"2026-06-16 11:09:57","level":"ERROR","message":"Invalid token format","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/prescription/create","method":"POST","request_id":"11a481e6e365"}
+{"timestamp":"2026-06-16 11:10:33","level":"ERROR","message":"Invalid token format","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/prescription/create","method":"POST","request_id":"3602306735df"}
+{"timestamp":"2026-06-16 11:10:34","level":"ERROR","message":"Invalid token format","context":{"code":401,"errors":[]},"doctor_id":null,"endpoint":"/rx-backend/prescription/create","method":"POST","request_id":"c0fcdaedcfd5"}
