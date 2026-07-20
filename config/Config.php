@@ -33,7 +33,7 @@ class Config
                 'host'       => 'smtp.gmail.com',
                 'port'       => 587,
                 'username'   => 'vedanshuonwork@gmail.com',
-                'password'   => 'onyp kirv hndr nnaw',
+                'password'   => 'onyp kirv hndr nnaw',//IMPORTANT
                 'from_email' => 'vedanshuonwork@gmail.com',
                 'from_name'  => 'PrescriptionRx',
             ],

@@ -47,6 +47,8 @@ class NewAuthController extends BaseController
         // SEND EMAIL
         MailHelper::sendRegisterOtpEmail($data['email'], $otp);
 
+        
+
         // RESPONSE
         Response::success([
             'doctor_id' => $doctorId
@@ -235,6 +237,7 @@ class NewAuthController extends BaseController
 
         MailHelper::sendResetEmail($data['email'], $otp);
         
+       
 
         $this->db->insert('verification', [
             'doctor_id'   => $doctor['id'],
@@ -312,6 +315,8 @@ class NewAuthController extends BaseController
         $otp = CommonHelper::generateOtp();
 
         MailHelper::sendRegisterOtpEmail($doctor['email'], $otp);
+
+       
 
         $this->db->insert('verification', [
             'doctor_id'   => $data['doctor_id'],

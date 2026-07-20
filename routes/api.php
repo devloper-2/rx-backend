@@ -146,6 +146,14 @@ $router->post(
     ['auth'=>true]
 );
 
+$router->put(
+    "/prescription/{id}",
+    "PrescribeController@update"
+);
 
+/*$router->post(
+    "/prescription/update/{id}",
+    "PrescribeController@update"
+);*/
 
 ?>

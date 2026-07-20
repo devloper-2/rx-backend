@@ -11,7 +11,7 @@ class PrescribeController extends BaseController
         parent::__construct($request, $authUser);
     }
 
-
+    
     // ─────────────────────────────────────────
     // CREATE PRESCRIPTION
     // ─────────────────────────────────────────
@@ -221,6 +221,187 @@ class PrescribeController extends BaseController
     }
 
 
+    //FOR UPDATE
+    public function update($params)
+    {
+        $id = $params['id'];
+        $input = json_decode(file_get_contents("php://input"), true);
+        $doctorId = $this->authUser['doctor_id'];
+
+        try {
+
+        $exists = $this->db->getRow(
+            "SELECT * FROM prescriptions
+             WHERE id=?
+             AND doctor_id=?
+             AND deleted_at IS NULL",
+            [$id,$doctorId]
+        );
+
+        if(!$exists){
+            echo json_encode([
+                "success"=>false,
+                "message"=>"Prescription not found"
+            ]);
+            return;
+        }
+
+        //----------------------------------------
+        // BMI
+        //----------------------------------------
+
+        $bmi=null;
+
+        if(!empty($input['weight_kg']) && !empty($input['height_cm'])){
+
+            $heightM=$input['height_cm']/100;
+
+            $bmi=$input['weight_kg']/($heightM*$heightM);
+
+            $bmi=round($bmi,2);
+        }
+
+        //----------------------------------------
+        // UPDATE PRESCRIPTION
+        //----------------------------------------
+
+        $this->db->update(
+            "prescriptions",
+            [
+                "clinic_id"=>$input["clinic_id"] ?? null,
+                "weight_kg"=>$input["weight_kg"] ?? null,
+                "height_cm"=>$input["height_cm"] ?? null,
+                "bmi"=>$bmi,
+                "bp_systolic"=>$input["bp_systolic"] ?? null,
+                "bp_diastolic"=>$input["bp_diastolic"] ?? null,
+                "pulse_bpm"=>$input["pulse_bpm"] ?? null,
+                "temperature_f"=>$input["temperature_f"] ?? null,
+                "spo2_pct"=>$input["spo2_pct"] ?? null,
+                "rbs_mg_dl"=>$input["rbs_mg_dl"] ?? null,
+                "respiratory_rate"=>$input["respiratory_rate"] ?? null,
+                "diagnosis"=>$input["diagnosis"] ?? null,
+                "chief_complaint" => $input["chief_complaint"] ?? null,
+                "clinical_notes"=>$input["clinical_notes"] ?? null,
+                //"followup_date"=>$input["followup_date"] ?? null,
+                "followup_date" => !empty($input["followup_date"])
+                    ? date("Y-m-d", strtotime($input["followup_date"]))
+                    : null,
+                "followup_note"=>$input["followup_note"] ?? null
+            ],
+            "id=:id",
+            [
+                ":id"=>$id
+            ]
+        );
+
+        $this->db->update(
+            "prescription_medicines",
+            [
+                "deleted_at"=>date("Y-m-d H:i:s")
+            ],
+            "prescription_id=:id",
+            [
+                ":id"=>$id
+            ]
+        );
+
+        if(!empty($input["medicines"])){
+
+            foreach($input["medicines"] as $med){
+
+                $this->db->insert(
+                    "prescription_medicines",
+                    [
+                        "prescription_id"=>$id,
+                        "medicine_id"=>$med["medicine_id"] ?? null,
+                        "medicine_name"=>$med["medicine_name"],
+                        "category_id"=>$med["category_id"] ?? null,
+                        "total_qty"=>$med["total_qty"] ?? 0,
+                        "qty_unit"=>$med["qty_unit"] ?? "piece",
+                        "duration_days"=>$med["duration_days"] ?? null,
+                        "duration_note"=>$med["duration_note"] ?? null,
+                        "dose_schedule"=>json_encode($med["dose_schedule"] ?? []),
+                        "freq_display"=>$med["freq_display"] ?? null,
+                        "instructions"=>$med["instructions"] ?? null
+                    ]
+                );
+            }
+        }
+
+        $this->db->update(
+            "prescription_symptoms",
+            [
+                "deleted_at"=>date("Y-m-d H:i:s")
+            ],
+            "prescription_id=:id",
+            [
+                ":id"=>$id
+            ]
+        );
+
+        if(!empty($input["symptoms"])){
+
+            foreach($input["symptoms"] as $sym){
+
+                $this->db->insert(
+                    "prescription_symptoms",
+                    [
+                        "prescription_id"=>$id,
+                        "symptom_id"=>$sym["symptom_id"] ?? null,
+                        "custom_symptom"=>$sym["custom_symptom"] ?? null,
+                        "severity"=>$sym["severity"] ?? "mild",
+                        "duration"=>$sym["duration"] ?? null,
+                        "notes"=>$sym["notes"] ?? null
+                    ]
+                );
+            }
+        }
+
+        $this->db->update(
+            "prescription_advice",
+            [
+                "deleted_at"=>date("Y-m-d H:i:s")
+            ],
+            "prescription_id=:id",
+            [
+                ":id"=>$id
+            ]
+        );
+
+        if(!empty($input["advice"])){
+            foreach($input["advice"] as $adv){
+
+                $this->db->insert(
+                    "prescription_advice",
+                    [
+                        "prescription_id"=>$id,
+                        "template_id"=>$adv["template_id"] ?? null,
+                        if (empty($adv["text"])) continue;
+                        "category"=>$adv["category"] ?? "other"
+                    ]       
+                );
+            }
+        }
+
+        echo json_encode([
+            "success"=>true,
+            "message"=>"Prescription updated"
+        ]);
+
+    }
+    catch(Exception $e){
+
+        echo json_encode([
+            "success"=>false,
+            "message"=>$e->getMessage()
+        ]);
+
+    }
+
+
+    }
+
+
     // ─────────────────────────────────────────
     // GET FULL PRESCRIPTION
     // ─────────────────────────────────────────
@@ -232,7 +413,7 @@ class PrescribeController extends BaseController
       try {
 
         // =========================
-        // 1. PRESCRIPTION
+        //PRESCRIPTION
         // =========================
         $prescription = $this->db->getRow(
             "SELECT * FROM prescriptions WHERE id = ? AND deleted_at IS NULL",
@@ -248,17 +429,18 @@ class PrescribeController extends BaseController
         }
 
         // =========================
-        // 2. PATIENT
+        // PATIENT
         // =========================
         $patient = $this->db->getRow(
-            "SELECT * FROM patients WHERE id = ?",
+            "SELECT * FROM patients WHERE id = ? AND deleted_at IS NULL",
+            //"SELECT * FROM patients WHERE id = ?",
             [$prescription['patient_id']]
         );
 
         $prescription['patient'] = $patient;
 
         // =========================
-        // 3. MEDICINES
+        // MEDICINES
         // =========================
         $medicines = $this->db->getRows(
             "SELECT * FROM prescription_medicines WHERE prescription_id = ? AND deleted_at IS NULL",
@@ -272,20 +454,21 @@ class PrescribeController extends BaseController
         $prescription['medicines'] = $medicines;
 
         // =========================
-        // 4. SYMPTOMS
+        // SYMPTOMS
         // =========================
         $symptoms = $this->db->getRows(
             "SELECT ps.*, s.name as symptom_name
              FROM prescription_symptoms ps
              LEFT JOIN symptoms s ON s.id = ps.symptom_id
-             WHERE ps.prescription_id = ? AND deleted_at IS NULL",
+             WHERE ps.prescription_id = ? AND ps.deleted_at IS NULL",
+             //WHERE ps.prescription_id = ? AND deleted_at IS NULL",
             [$id]
         );
 
         $prescription['symptoms'] = $symptoms;
 
         // =========================
-        // 5. ADVICE
+        //ADVICE
         // =========================
         $advice = $this->db->getRows(
             "SELECT * FROM prescription_advice WHERE prescription_id = ? AND deleted_at IS NULL",
@@ -321,7 +504,7 @@ class PrescribeController extends BaseController
 
       try {
 
-        // 1. DELETE MAIN PRESCRIPTION
+        //  DELETE MAIN PRESCRIPTION
         $this->db->update(
             'prescriptions',
             ['deleted_at' => date('Y-m-d H:i:s')],
@@ -329,7 +512,7 @@ class PrescribeController extends BaseController
             [':id' => $id]
         );
 
-        // 2. DELETE MEDICINES
+        // DELETE MEDICINES
         $this->db->update(
             'prescription_medicines',
             ['deleted_at' => date('Y-m-d H:i:s')],
@@ -337,7 +520,7 @@ class PrescribeController extends BaseController
             [':id' => $id]
         );
 
-        // 3. DELETE SYMPTOMS
+        // DELETE SYMPTOMS
         $this->db->update(
             'prescription_symptoms',
             ['deleted_at' => date('Y-m-d H:i:s')],
@@ -345,7 +528,7 @@ class PrescribeController extends BaseController
             [':id' => $id]
         );
 
-        // 4. DELETE ADVICE
+        //  DELETE ADVICE
         $this->db->update(
             'prescription_advice',
             ['deleted_at' => date('Y-m-d H:i:s')],
@@ -556,3 +739,4 @@ public function getClinics()
 
 
   }
+}
