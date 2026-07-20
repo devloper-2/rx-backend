@@ -45,18 +45,16 @@ class NewAuthController extends BaseController
         ]);
 
         // SEND EMAIL
-        MailHelper::sendRegisterOtpEmail($data['email'], $otp);
+        $mailSent = MailHelper::sendRegisterOtpEmail($data['email'], $otp);
 
-        
+if (!$mailSent) {
+    Response::error('Unable to send OTP email', 500);
+}
 
-        // RESPONSE
-        Response::success([
-            'doctor_id' => $doctorId
-        ], 'OTP sent to email');
+Response::success([
+    'doctor_id' => $doctorId
+], 'OTP sent to email');
 
-        if (!$verificationId) {
-            Response::error('OTP generation failed', 500);
-        }
         
     }
 

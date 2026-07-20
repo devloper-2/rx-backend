@@ -148,7 +148,8 @@ class MailHelper
                 'email' => $to,
                 'error' => $e->getMessage()
             ]);
-            return false;
+            //return false;
+             Response::error($mail->ErrorInfo, 500);
         }
     }
 

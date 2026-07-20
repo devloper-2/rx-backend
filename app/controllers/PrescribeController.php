@@ -368,17 +368,22 @@ class PrescribeController extends BaseController
             ]
         );
 
-        if(!empty($input["advice"])){
-            foreach($input["advice"] as $adv){
+        if (!empty($input["advice"])) {
+
+            foreach ($input["advice"] as $adv) {
+
+                if (empty($adv["text"])) {
+                    continue;
+                }
 
                 $this->db->insert(
                     "prescription_advice",
                     [
-                        "prescription_id"=>$id,
-                        "template_id"=>$adv["template_id"] ?? null,
-                        if (empty($adv["text"])) continue;
-                        "category"=>$adv["category"] ?? "other"
-                    ]       
+                        "prescription_id" => $id,
+                        "template_id" => $adv["template_id"] ?? null,
+                        "custom_text" => $adv["text"],
+                        "category" => $adv["category"] ?? "other"
+                    ]
                 );
             }
         }
@@ -739,4 +744,4 @@ public function getClinics()
 
 
   }
-}
+

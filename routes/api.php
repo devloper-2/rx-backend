@@ -147,13 +147,10 @@ $router->post(
 );
 
 $router->put(
-    "/prescription/{id}",
-    "PrescribeController@update"
+    "prescription/{id}",
+    "Prescribe",
+    "update",
+    ['auth' => true]
 );
-
-/*$router->post(
-    "/prescription/update/{id}",
-    "PrescribeController@update"
-);*/
 
 ?>
