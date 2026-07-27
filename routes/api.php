@@ -153,4 +153,15 @@ $router->put(
     ['auth' => true]
 );
 
+$router->get(
+
+);
+
+$router->get(
+    "/prescription/list",
+    function ($params) use ($request, $authUser) {
+        (new PrescribeController($request, $authUser))->list();
+    }
+);
+
 ?>

@@ -448,7 +448,15 @@ class PrescribeController extends BaseController
         // MEDICINES
         // =========================
         $medicines = $this->db->getRows(
-            "SELECT * FROM prescription_medicines WHERE prescription_id = ? AND deleted_at IS NULL",
+            //"SELECT * FROM prescription_medicines WHERE prescription_id = ? AND deleted_at IS NULL",
+            "SELECT
+pm.*,
+m.strength
+FROM prescription_medicines pm
+LEFT JOIN medicines m
+ON m.id = pm.medicine_id
+WHERE pm.prescription_id=?
+AND pm.deleted_at IS NULL",
             [$id]
         );
 
@@ -741,6 +749,62 @@ public function getClinics()
 }
     
 
+// ─────────────────────────────────────────
+// LIST PRESCRIPTIONS
+// GET : /prescription/list
+// ─────────────────────────────────────────
+
+public function list()
+{
+    try {
+
+        $doctorId = $this->authUser['doctor_id'];
+
+        $rows = $this->db->getRows(
+            "SELECT
+                p.id,
+                p.created_at,
+                p.followup_date,
+                p.diagnosis,
+                p.chief_complaint,
+
+                pt.id AS patient_id,
+                pt.name AS patient_name,
+                pt.mobile,
+                pt.sex,
+                pt.age_years
+
+            FROM prescriptions p
+
+            INNER JOIN patients pt
+                ON pt.id = p.patient_id
+
+            WHERE
+                p.doctor_id = ?
+                AND p.deleted_at IS NULL
+                AND pt.deleted_at IS NULL
+
+            ORDER BY p.created_at DESC",
+
+            [
+                $doctorId
+            ]
+        );
+
+        echo json_encode([
+            "success" => true,
+            "data" => $rows
+        ]);
+
+    } catch (Exception $e) {
+
+        echo json_encode([
+            "success" => false,
+            "message" => $e->getMessage()
+        ]);
+
+    }
+}
 
 
   }
