@@ -192,17 +192,6 @@ class Validator
                     $this->addError($field, "{$label} confirmation does not match.");
                 }
                 break;
-
-            case 'unique_email':
-                // Example custom rule — check DB uniqueness
-                if ($value !== null) {
-                    $db  = Database::getInstance();
-                    $row = $db->getRow('SELECT id FROM users WHERE email = :email', [':email' => $value]);
-                    if ($row) {
-                        $this->addError($field, "{$label} is already taken.");
-                    }
-                }
-                break;
         }
     }
 

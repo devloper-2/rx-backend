@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  * generateToken($payload)            → access token string
  * validateToken($token)              → decoded payload array or throws
- * generateRefreshToken($userId)      → refresh token string (stored in DB)
+ * generateRefreshToken($doctorId)    → refresh token string (hash stored in auth_tokens)
  * refreshAccessToken($refreshToken)  → new access token or throws
  * revokeRefreshToken($token)         → bool
  * getAuthenticatedUser()             → user array from current request
@@ -101,19 +101,31 @@ class Auth
 
     // ── Refresh tokens ───────────────────────────────────────────────────────
     /**
-     * Generate a refresh token, persist it in the DB.
+     * Generate a refresh token for a doctor and persist its hash in auth_tokens.
+     * The schema allows one row per doctor (uq_doctor_token), so a new login
+     * replaces — and thereby signs out — the doctor's previous session.
      */
-    public function generateRefreshToken(int $userId): string
+    public function generateRefreshToken(int $doctorId): string
     {
         $token     = bin2hex(random_bytes(40));
         $expiresAt = date('Y-m-d H:i:s', time() + $this->refreshExpiry);
+        $device    = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
 
-        $this->db->insert('refresh_tokens', [
-            'user_id'    => $userId,
-            'token'      => hash('sha256', $token),
-            'expires_at' => $expiresAt,
-            'created_at' => date('Y-m-d H:i:s'),
-        ]);
+        $this->db->executeQuery(
+            'INSERT INTO auth_tokens (doctor_id, refresh_token, device_info, ip_address, expires_at, revoked_at, created_at)
+             VALUES (:doctor_id, :token, :device, :ip, :expires_at, NULL, :created_at)
+             ON DUPLICATE KEY UPDATE refresh_token = VALUES(refresh_token), device_info = VALUES(device_info),
+                 ip_address = VALUES(ip_address), expires_at = VALUES(expires_at),
+                 revoked_at = NULL, created_at = VALUES(created_at)',
+            [
+                ':doctor_id'  => $doctorId,
+                ':token'      => hash('sha256', $token),
+                ':device'     => $device,
+                ':ip'         => CommonHelper::getClientIp(),
+                ':expires_at' => $expiresAt,
+                ':created_at' => date('Y-m-d H:i:s'),
+            ]
+        );
 
         return $token;
     }
@@ -124,30 +136,29 @@ class Auth
      */
     public function refreshAccessToken(string $refreshToken): array
     {
-        $hashed = hash('sha256', $refreshToken);
-        $row    = $this->db->getRow(
-            'SELECT rt.*, u.id AS user_id, u.role, u.status
-             FROM refresh_tokens rt
-             JOIN users u ON u.id = rt.user_id
-             WHERE rt.token = :token AND rt.revoked = 0',
-            [':token' => $hashed]
+        $row = $this->db->getRow(
+            'SELECT t.expires_at, d.id AS doctor_id, d.is_active
+             FROM auth_tokens t
+             JOIN doctors d ON d.id = t.doctor_id AND d.deleted_at IS NULL
+             WHERE t.refresh_token = :token AND t.revoked_at IS NULL',
+            [':token' => hash('sha256', $refreshToken)]
         );
 
         if (!$row) {
-            throw new RuntimeException('Invalid refresh token', 401);
+            throw new RuntimeException('Session expired. Please sign in again.', 401);
         }
 
         if (strtotime($row['expires_at']) < time()) {
-            throw new RuntimeException('Refresh token expired', 401);
+            throw new RuntimeException('Session expired. Please sign in again.', 401);
         }
 
-        if ($row['status'] !== 'active') {
+        if ((int) $row['is_active'] !== 1) {
             throw new RuntimeException('Account is not active', 403);
         }
 
         $accessToken = $this->generateToken([
-            'user_id' => (int) $row['user_id'],
-            'role'    => $row['role'],
+            'doctor_id' => (int) $row['doctor_id'],
+            'role'      => 'doctor',
         ]);
 
         return ['access_token' => $accessToken, 'token_type' => 'Bearer'];
@@ -156,14 +167,24 @@ class Auth
     /** Revoke a refresh token (logout). */
     public function revokeRefreshToken(string $refreshToken): bool
     {
-        $hashed  = hash('sha256', $refreshToken);
         $updated = $this->db->update(
-            'refresh_tokens',
-            ['revoked' => 1],
-            'token = :token',
-            [':token' => $hashed]
+            'auth_tokens',
+            ['revoked_at' => date('Y-m-d H:i:s')],
+            'refresh_token = :token AND revoked_at IS NULL',
+            [':token' => hash('sha256', $refreshToken)]
         );
         return $updated > 0;
+    }
+
+    /** Revoke every session of a doctor (password change / reset). */
+    public function revokeAllForDoctor(int $doctorId): void
+    {
+        $this->db->update(
+            'auth_tokens',
+            ['revoked_at' => date('Y-m-d H:i:s')],
+            'doctor_id = :id AND revoked_at IS NULL',
+            [':id' => $doctorId]
+        );
     }
 
     // ── Request helper ───────────────────────────────────────────────────────

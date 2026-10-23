@@ -147,14 +147,7 @@ class Request
     /** Sanitized + typed summary for logging (masks sensitive keys). */
     public function toLogArray(): array
     {
-        $sensitive = ['password', 'password_confirmation', 'token', 'secret', 'card_number', 'cvv'];
-        $data      = $this->all();
-
-        foreach ($sensitive as $key) {
-            if (array_key_exists($key, $data)) {
-                $data[$key] = '***';
-            }
-        }
+        $data = self::maskSensitive($this->all());
 
         return [
             'method'  => $this->method,
@@ -164,6 +157,23 @@ class Request
             'params'  => $data,
             'files'   => array_keys($this->files),
         ];
+    }
+
+    /**
+     * Replace the value of any key that looks secret. Matching is by pattern
+     * (password, current_password, refresh_token, otp, …) so new fields are
+     * covered by default instead of leaking until someone remembers to list them.
+     */
+    private static function maskSensitive(array $data): array
+    {
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $data[$key] = self::maskSensitive($value);
+            } elseif (preg_match('/pass|token|secret|otp|pin$|cvv|card|authorization/i', (string) $key)) {
+                $data[$key] = '***';
+            }
+        }
+        return $data;
     }
 
     private function __clone() {}

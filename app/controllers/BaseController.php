@@ -72,6 +72,54 @@ abstract class BaseController
         return $this->authUser;
     }
 
+    /**
+     * Require a signed-in, still-active doctor and return their row.
+     * Re-checked against the database so a disabled/deleted account loses
+     * access immediately instead of when its access token expires.
+     */
+    protected function requireDoctor(): array
+    {
+        $auth   = $this->requireAuth();
+        $doctor = $this->db->getRow(
+            'SELECT * FROM doctors WHERE id = :id AND deleted_at IS NULL AND is_active = 1',
+            [':id' => (int) ($auth['doctor_id'] ?? 0)]
+        );
+        if (!$doctor) {
+            Response::unauthorized('Your session is no longer valid. Please sign in again.');
+        }
+        return $doctor;
+    }
+
+    /** Trim, strip tags and collapse whitespace. Output encoding is the client's job. */
+    protected static function clean(string $value): string
+    {
+        return trim(preg_replace('/\s+/u', ' ', strip_tags($value)));
+    }
+
+    /** Doctor row safe to send to the app (no password hash) plus derived fields. */
+    protected static function publicDoctor(array $doctor): array
+    {
+        $fields   = ['email', 'degree', 'specialization', 'registration_no', 'experience_yrs'];
+        $filled   = count(array_filter($fields, fn ($f) => $doctor[$f] !== null && $doctor[$f] !== ''));
+        $expires  = $doctor['plan_expires_at'];
+
+        return [
+            'id'               => (int) $doctor['id'],
+            'name'             => $doctor['name'],
+            'email'            => $doctor['email'],
+            'mobile'           => $doctor['mobile'],
+            'degree'           => $doctor['degree'],
+            'specialization'   => $doctor['specialization'],
+            'registration_no'  => $doctor['registration_no'],
+            'experience_yrs'   => $doctor['experience_yrs'] === null ? null : (int) $doctor['experience_yrs'],
+            'plan'             => $doctor['plan'],
+            'plan_expires_at'  => $expires,
+            'plan_days_left'   => $expires ? (int) max(0, ceil((strtotime($expires) - time()) / 86400)) : null,
+            'profile_percent'  => (int) round((1 + $filled) / (1 + count($fields)) * 100), // name is always present
+            'created_at'       => $doctor['created_at'],
+        ];
+    }
+
     /** Require specific role */
     protected function requireRole(string ...$roles): array
     {

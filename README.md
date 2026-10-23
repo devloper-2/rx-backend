@@ -1,320 +1,65 @@
-# PHP REST API — Class-Based, No Framework
+# Prescription Rx — Backend (PHP, no framework)
 
-A production-ready PHP REST API built from scratch — no Composer, no frameworks.
-Designed for **shared hosting** (Apache + mod_rewrite).
+Plain-PHP REST API for the Prescription Rx doctor app. Apache + `mod_rewrite` + MySQL/MariaDB.
 
----
+## Quick start (XAMPP)
 
-## 📁 Project Structure
+1. Create the database and import the dump, then apply the migration:
+   ```bash
+   mysql -uroot -e "CREATE DATABASE php_rest_api CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+   mysql -uroot php_rest_api < php_rest_api.sql
+   mysql -uroot php_rest_api < migrations/sql/002_doctor_auth.sql
+   ```
+2. Make `logs/`, `uploads/` and `storage/` writable by Apache (`chmod -R a+rwX logs uploads storage` for local dev).
+3. Check `config/Config.php` (DB credentials, JWT secret). `ENV = 'local'` for development.
+4. API root (this checkout): `http://<your-ip>/prescription-rx/rx-backend/`
 
-```
-php-rest-api/
-├── .htaccess                  ← URL rewriting (domain.com/user/login)
-├── index.php                  ← Entry point (bootstrap + dispatch)
-│
-├── config/
-│   └── Config.php             ← All config (DB, JWT, upload, log) — local/production
-│
-├── core/
-│   ├── Router.php             ← Route dispatch + JWT middleware + rate limiting
-│   ├── Request.php            ← HTTP request parsing (JSON, form, files)
-│   ├── Response.php           ← Standardized JSON response + status codes
-│   ├── Database.php           ← PDO singleton (CRUD, paginate, transactions)
-│   ├── Auth.php               ← Pure-PHP JWT (HS256) — no libraries needed
-│   ├── Logger.php             ← Structured file logging (request/response/error)
-│   ├── RateLimit.php          ← Per-endpoint, per-IP rate limiting (DB-backed)
-│   └── Validator.php          ← Input validation with chainable rules
-│
-├── helpers/
-│   ├── CommonHelper.php       ← Utility functions (hash, sanitize, slug, etc.)
-│   └── FileUploadHelper.php   ← Media upload → uploads/{entity}/{id}/{file}
-│
-├── app/controllers/
-│   ├── BaseController.php     ← All controllers extend this
-│   ├── AuthController.php     ← register, login, refresh, logout, me
-│   └── UserController.php     ← list, detail, update, delete, uploadAvatar
-│
-├── routes/
-│   └── api.php                ← All route definitions with options
-│
-├── migrations/
-│   ├── Runner.php             ← Migration engine
-│   ├── run.php                ← CLI entry: php migrations/run.php
-│   └── versions/
-│       └── 001_initial_setup.php  ← Creates tables + seeds admin user
-│
-├── logs/                      ← Auto-created, web-protected
-│   ├── requests/              ← Every request + response logged
-│   └── errors/                ← Errors only
-│
-└── uploads/                   ← Media files
-    └── user/1/avatar_xxx.jpg
-```
+> The old `migrations/versions/001_initial_setup.php` belongs to the generic template (it creates
+> `users` / `refresh_tokens`) and is **not used** — the real schema is `php_rest_api.sql`.
 
----
+## Endpoints
 
-## ⚡ Quick Start
+All responses: `{ status, code, message, data, errors, meta }`.
 
-### 1. Database Setup
-```sql
-CREATE DATABASE php_rest_api CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| POST | `auth/register-new` | – | `name, phone, countrycode, password` → creates an *inactive* doctor, issues a mobile OTP |
+| POST | `auth/verify-otp` | – | `mobile, otp` → activates the account, returns tokens |
+| POST | `auth/resend-otp` | – | `mobile, purpose (register\|reset)` |
+| POST | `auth/login-new` | – | `identifier (mobile or e-mail), password` |
+| POST | `auth/forgot-password` | – | `mobile` (mobile or e-mail) → reset OTP (generic response, no account enumeration) |
+| POST | `auth/reset-password` | – | `mobile, otp, password` |
+| POST | `auth/refresh` | – | `refresh_token` → new access token |
+| POST | `auth/logout` | – | `refresh_token` (proves ownership; works with an expired access token) |
+| GET | `auth/me` | JWT | current doctor |
+| GET/PUT | `doctor/profile` | JWT | read / update name, e-mail, degree, specialization, registration_no, experience_yrs |
+| PUT | `doctor/change-password` | JWT | `current_password, password` → signs out other devices, returns fresh tokens |
 
-### 2. Configure
-Edit `config/Config.php`:
-```php
-const ENV = 'local';  // or 'production'
+## OTP delivery (important)
 
-// In 'local' section:
-'db' => [
-    'host' => 'localhost',
-    'name' => 'php_rest_api',
-    'user' => 'root',
-    'pass' => '',
-],
-'jwt' => [
-    'secret' => 'CHANGE-THIS-TO-A-STRONG-SECRET-KEY',
-],
-```
+SMS / e-mail sending is **not implemented**. While `Config app.expose_dev_otp` is `true` (local only) the
+code is returned in the response as `dev_otp` and the app shows it in a yellow "Test mode" banner.
+Wire a provider in `AuthController::issueOtp()` (see the `TODO`) and set `expose_dev_otp` to `false`
+before going live. The production block in `Config.php` already has it off.
 
-### 3. Run Migrations
+OTP rules: 6 digits · valid 5 min · 30 s resend cooldown · locked after 5 wrong attempts.
+
+## Sessions
+
+`auth_tokens` has a unique key on `doctor_id`, so a doctor has **one** active session: signing in on a
+second device signs the first one out. Access token 1 h, refresh token 7 days (stored hashed).
+
+## Tests
+
 ```bash
-# Creates tables + seeds admin@example.com / Admin@1234
-php migrations/run.php
-
-# Other commands:
-php migrations/run.php status    # View migration history
-php migrations/run.php rollback  # Undo last batch
+python3 tests/api_smoke.py            # 56 end-to-end checks against the running server
 ```
 
-### 4. Place in htdocs
-Copy the entire folder to your htdocs/www directory. Make sure `mod_rewrite` is enabled.
+It creates throw-away doctors with random mobile numbers. See `OVERNIGHT_REPORT.md` in the repo root
+for everything that was found and changed.
 
----
+## Before production
 
-## 🔌 API Endpoints
-
-### Base URL
-```
-http://localhost/php-rest-api
-```
-
-### Authentication
-
-| Method | Endpoint        | Auth | Rate Limit |
-|--------|-----------------|------|------------|
-| POST   | /auth/register  | No   | 3/hr       |
-| POST   | /auth/login     | No   | 5/hr       |
-| POST   | /auth/refresh   | No   | 10/hr      |
-| POST   | /auth/logout    | Yes  | —          |
-| GET    | /auth/me        | Yes  | 30/hr      |
-
-### User Management
-
-| Method | Endpoint              | Auth | Rate Limit | Role  |
-|--------|-----------------------|------|------------|-------|
-| GET    | /user/list            | Yes  | 15/hr      | Any   |
-| GET    | /user/detail/{id}     | Yes  | 30/hr      | Any   |
-| PUT    | /user/update/{id}     | Yes  | 10/hr      | Self/Admin |
-| DELETE | /user/delete/{id}     | Yes  | 5/hr       | Admin |
-| POST   | /user/upload-avatar   | Yes  | 5/hr       | Self  |
-| PUT    | /user/change-password | Yes  | 3/hr       | Self  |
-
----
-
-## 📨 Request / Response Format
-
-### Login Request
-```http
-POST /auth/login
-Content-Type: application/json
-
-{
-    "email": "admin@example.com",
-    "password": "Admin@1234"
-}
-```
-
-### Success Response
-```json
-{
-    "status": true,
-    "code": 200,
-    "message": "Login successful",
-    "data": {
-        "user": { "id": 1, "name": "Super Admin", "email": "admin@example.com", "role": "admin" },
-        "access_token": "eyJ...",
-        "refresh_token": "abc123...",
-        "token_type": "Bearer",
-        "expires_in": 3600
-    },
-    "errors": null,
-    "meta": {
-        "timestamp": "2024-01-15T10:30:00+00:00",
-        "version": "v1",
-        "elapsed_ms": 12.5
-    }
-}
-```
-
-### Error Response (Validation)
-```json
-{
-    "status": false,
-    "code": 422,
-    "message": "Validation failed",
-    "data": null,
-    "errors": {
-        "email": ["Email is required."],
-        "password": ["Password must be at least 8 characters."]
-    },
-    "meta": { ... }
-}
-```
-
-### Authenticated Request
-```http
-GET /user/list?page=1&limit=10
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-### Paginated Response
-```json
-{
-    "status": true,
-    "code": 200,
-    "message": "Users fetched successfully",
-    "data": [ ... ],
-    "pagination": {
-        "total": 50,
-        "page": 1,
-        "limit": 10,
-        "total_pages": 5,
-        "has_next": true,
-        "has_prev": false
-    }
-}
-```
-
----
-
-## ➕ Adding New Controllers
-
-### 1. Create controller file
-```php
-// app/controllers/ProductController.php
-<?php
-declare(strict_types=1);
-require_once ROOT_PATH . '/app/controllers/BaseController.php';
-
-class ProductController extends BaseController
-{
-    public function list(): void
-    {
-        $this->requireAuth();
-        $page   = $this->getPage();
-        $limit  = $this->getLimit();
-        $result = $this->db->paginate('SELECT * FROM products ORDER BY id DESC', [], $page, $limit);
-        Response::paginated($result['data'], $result['pagination']);
-    }
-
-    public function create(): void
-    {
-        $this->requireAuth();
-        $data = $this->validate([
-            'name'  => 'required|string|min:2|max:200',
-            'price' => 'required|numeric|min:0',
-        ]);
-        $id = $this->db->insert('products', [
-            'name'       => CommonHelper::sanitizeString($data['name']),
-            'price'      => $data['price'],
-            'created_at' => CommonHelper::now(),
-        ]);
-        Response::created(['id' => $id], 'Product created');
-    }
-}
-```
-
-### 2. Register routes
-```php
-// routes/api.php
-$router->get('product/list',   'Product', 'list',   ['auth' => true, 'rate_limit' => ['max' => 30, 'window' => 3600]]);
-$router->post('product/create','Product', 'create', ['auth' => true]);
-```
-
-### 3. Add URL-param routes
-```php
-$router->get('product/detail/{id}', 'Product', 'detail', ['auth' => true]);
-// In controller: public function detail(array $urlParams): void { $id = $urlParams['id']; }
-```
-
----
-
-## 📁 Adding Migrations
-
-```php
-// migrations/versions/002_add_products_table.php
-<?php
-return [
-    'up' => function (PDO $pdo): void {
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS products (
-                id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                name       VARCHAR(200) NOT NULL,
-                price      DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-                created_at DATETIME NOT NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
-    },
-    'down' => function (PDO $pdo): void {
-        $pdo->exec("DROP TABLE IF EXISTS products;");
-    },
-];
-```
-
-Then run: `php migrations/run.php`
-
----
-
-## 📂 File Upload
-
-```http
-POST /user/upload-avatar
-Authorization: Bearer <token>
-Content-Type: multipart/form-data
-
-avatar: <file>
-```
-
-Files are saved to: `uploads/user/{user_id}/avatar_{timestamp}_{random}.jpg`
-
----
-
-## 🔐 Default Credentials
-
-| Email              | Password   | Role  |
-|--------------------|------------|-------|
-| admin@example.com  | Admin@1234 | admin |
-
-> ⚠️ Change the admin password immediately after setup!
-
----
-
-## 🧾 Log Files
-
-```
-logs/YYYY-MM-DD.log            → General app log
-logs/requests/YYYY-MM-DD.log   → Every request + response (JSON)
-logs/errors/YYYY-MM-DD.log     → Errors only
-```
-
-All logs are web-protected via `.htaccess`.
-
----
-
-## ⚙️ PHP Requirements
-
-- PHP 8.1+
-- PDO + PDO_MySQL extension
-- Apache with `mod_rewrite`
-- `fileinfo` extension (MIME detection)
+- Change `jwt.secret` and DB credentials in the `production` block, set `ENV = 'production'`.
+- Serve over HTTPS; `expose_dev_otp` must stay `false`.
+- Keep `.htaccess` in place — it blocks `config/ core/ logs/ tests/ *.sql *.md .git` from the web.

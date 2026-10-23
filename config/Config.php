@@ -18,8 +18,12 @@ class Config
             'app' => [
                 'debug'    => true,
                 'timezone' => 'UTC',
-                'base_url' => 'http://localhost/php-rest-api',
+                'base_url' => 'http://localhost/prescription-rx/rx-backend',
                 'version'  => 'v1',
+                // SMS/e-mail delivery is not wired up yet. While true, OTP
+                // responses include `dev_otp` so the app can be tested end to
+                // end. MUST be false in production.
+                'expose_dev_otp' => true,
             ],
             'db' => [
                 'host'    => 'localhost',
@@ -40,7 +44,7 @@ class Config
                 'allowed_mime'  => ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'],
                 'allowed_ext'   => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'],
                 'upload_dir'    => ROOT_PATH . '/uploads/',
-                'base_url'      => 'http://localhost/php-rest-api/uploads/',
+                'base_url'      => 'http://localhost/prescription-rx/rx-backend/uploads/',
             ],
             'log' => [
                 'dir'   => ROOT_PATH . '/logs/',
@@ -58,6 +62,7 @@ class Config
                 'timezone' => 'UTC',
                 'base_url' => 'https://yourdomain.com',
                 'version'  => 'v1',
+                'expose_dev_otp' => false,
             ],
             'db' => [
                 'host'    => 'localhost',

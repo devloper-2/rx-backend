@@ -60,7 +60,7 @@ class RateLimit
             // First request — insert fresh counter
             $this->db->insert('rate_limits', [
                 'key'          => $key,
-                'endpoint'     => $endpoint,
+                'endpoints'    => $endpoint,
                 'ip'           => $ip,
                 'hits'         => 1,
                 'window_start' => date('Y-m-d H:i:s'),
@@ -92,7 +92,7 @@ class RateLimit
 
             $this->logger->warning('Rate limit exceeded', [
                 'ip'         => $ip,
-                'endpoint'   => $endpoint,
+                'endpoints'  => $endpoint,
                 'hits'       => $hits,
                 'max'        => $max,
                 'retry_after'=> $retryAfter,
@@ -124,23 +124,7 @@ class RateLimit
     // ── Helpers ──────────────────────────────────────────────────────────────
     private function getClientIp(): string
     {
-        $candidates = [
-            'HTTP_CLIENT_IP',
-            'HTTP_X_FORWARDED_FOR',
-            'HTTP_X_FORWARDED',
-            'HTTP_FORWARDED_FOR',
-            'HTTP_FORWARDED',
-            'REMOTE_ADDR',
-        ];
-        foreach ($candidates as $key) {
-            if (!empty($_SERVER[$key])) {
-                $ip = trim(explode(',', $_SERVER[$key])[0]);
-                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-                    return $ip;
-                }
-            }
-        }
-        return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+        return CommonHelper::getClientIp();
     }
 
     private function purgeOld(): void

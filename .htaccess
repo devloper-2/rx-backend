@@ -16,6 +16,11 @@ RewriteRule ^app/ - [F,L]
 RewriteRule ^routes/ - [F,L]
 RewriteRule ^migrations/ - [F,L]
 RewriteRule ^storage/ - [F,L]
+RewriteRule ^tests/ - [F,L]
+
+# Never serve repository metadata, database dumps, docs or scripts
+RewriteRule (^|/)\.git(/|$) - [F,L]
+RewriteRule \.(sql|md|bak|py|sh|log|ini|env)$ - [F,L]
 
 # Allow uploads to be accessed directly
 RewriteRule ^uploads/ - [L]

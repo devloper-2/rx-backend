@@ -114,7 +114,8 @@ class CommonHelper
     // ── Security utilities ───────────────────────────────────────────────────
     public static function hashPassword(string $password): string
     {
-        return password_hash($password, PASSWORD_ARGON2ID, ['memory_cost' => 65536, 'time_cost' => 4, 'threads' => 3]);
+        // bcrypt (PASSWORD_DEFAULT): available on every PHP build incl. XAMPP, and matches existing rows.
+        return password_hash($password, PASSWORD_DEFAULT);
     }
 
     public static function verifyPassword(string $password, string $hash): bool
@@ -138,18 +139,17 @@ class CommonHelper
     }
 
     // ── HTTP utilities ───────────────────────────────────────────────────────
+    /**
+     * Client IP as seen by the web server. Forwarding headers (X-Forwarded-For,
+     * Client-IP …) are client-controlled, so they are ignored: trusting them
+     * would let anyone dodge rate limits by sending a different header value.
+     * If this API is ever put behind a trusted reverse proxy, resolve the real
+     * IP there (e.g. mod_remoteip) so REMOTE_ADDR is already correct.
+     */
     public static function getClientIp(): string
     {
-        $keys = ['HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR'];
-        foreach ($keys as $key) {
-            if (!empty($_SERVER[$key])) {
-                $ip = trim(explode(',', $_SERVER[$key])[0]);
-                if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                    return $ip;
-                }
-            }
-        }
-        return '0.0.0.0';
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : '0.0.0.0';
     }
 
     public static function isValidEmail(string $email): bool

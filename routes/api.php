@@ -5,83 +5,31 @@ declare(strict_types=1);
 /**
  * API Routes
  * ----------
- * Pattern: $router->{method}('{controller}/{action}', 'ControllerName', 'actionMethod', $options)
+ * Pattern: $router->{method}('{path}', 'ControllerName', 'actionMethod', $options)
  *
  * Options:
  *   'auth'       => true   — Require valid JWT token
- *   'rate_limit' => ['max' => N, 'window' => seconds]
+ *   'rate_limit' => ['max' => N, 'window' => seconds]   (per client IP)
  *
- * URL examples:
- *   POST domain.com/auth/login
- *   GET  domain.com/user/list
- *   GET  domain.com/user/detail/42   (42 = {id} URL param)
+ * Limits are per IP and a clinic's whole staff may share one, so they are
+ * deliberately generous; brute force on codes is capped separately by the
+ * per-code attempt counter in AuthController.
  */
 
-// ── Auth routes (no JWT required) ────────────────────────────────────────────
-$router->post(
-    'auth/register',
-    'Auth', 'register',
-    ['rate_limit' => ['max' => 3, 'window' => 3600]]  // 3 registrations/hr per IP
-);
+// ── Auth (public) ────────────────────────────────────────────────────────────
+$router->post('auth/register-new',    'Auth', 'register',       ['rate_limit' => ['max' => 20, 'window' => 3600]]);
+$router->post('auth/verify-otp',      'Auth', 'verifyOtp',      ['rate_limit' => ['max' => 30, 'window' => 900]]);
+$router->post('auth/resend-otp',      'Auth', 'resendOtp',      ['rate_limit' => ['max' => 20, 'window' => 900]]);
+$router->post('auth/login-new',       'Auth', 'login',          ['rate_limit' => ['max' => 30, 'window' => 900]]);
+$router->post('auth/forgot-password', 'Auth', 'forgotPassword', ['rate_limit' => ['max' => 20, 'window' => 900]]);
+$router->post('auth/reset-password',  'Auth', 'resetPassword',  ['rate_limit' => ['max' => 30, 'window' => 900]]);
+$router->post('auth/refresh',         'Auth', 'refresh',        ['rate_limit' => ['max' => 60, 'window' => 3600]]);
+$router->post('auth/logout',          'Auth', 'logout',         ['rate_limit' => ['max' => 60, 'window' => 3600]]);
 
-$router->post(
-    'auth/login',
-    'Auth', 'login',
-    ['rate_limit' => ['max' => 5, 'window' => 3600]]  // 5 login attempts/hr per IP
-);
+// ── Auth (JWT required) ──────────────────────────────────────────────────────
+$router->get('auth/me', 'Auth', 'me', ['auth' => true]);
 
-$router->post(
-    'auth/refresh',
-    'Auth', 'refresh',
-    ['rate_limit' => ['max' => 10, 'window' => 3600]]
-);
-
-// ── Auth routes (JWT required) ────────────────────────────────────────────────
-$router->post(
-    'auth/logout',
-    'Auth', 'logout',
-    ['auth' => true]
-);
-
-$router->get(
-    'auth/me',
-    'Auth', 'me',
-    ['auth' => true, 'rate_limit' => ['max' => 30, 'window' => 3600]]
-);
-
-// ── User routes (JWT required) ────────────────────────────────────────────────
-$router->get(
-    'user/list',
-    'User', 'list',
-    ['auth' => true, 'rate_limit' => ['max' => 15, 'window' => 3600]]
-);
-
-$router->get(
-    'user/detail/{id}',
-    'User', 'detail',
-    ['auth' => true, 'rate_limit' => ['max' => 30, 'window' => 3600]]
-);
-
-$router->put(
-    'user/update/{id}',
-    'User', 'update',
-    ['auth' => true, 'rate_limit' => ['max' => 10, 'window' => 3600]]
-);
-
-$router->delete(
-    'user/delete/{id}',
-    'User', 'delete',
-    ['auth' => true, 'rate_limit' => ['max' => 5, 'window' => 3600]]
-);
-
-$router->post(
-    'user/upload-avatar',
-    'User', 'uploadAvatar',
-    ['auth' => true, 'rate_limit' => ['max' => 5, 'window' => 3600]]
-);
-
-$router->put(
-    'user/change-password',
-    'User', 'changePassword',
-    ['auth' => true, 'rate_limit' => ['max' => 3, 'window' => 3600]]
-);
+// ── Doctor profile (JWT required) ────────────────────────────────────────────
+$router->get('doctor/profile',          'Doctor', 'profile',        ['auth' => true]);
+$router->put('doctor/profile',          'Doctor', 'updateProfile',  ['auth' => true]);
+$router->put('doctor/change-password',  'Doctor', 'changePassword', ['auth' => true, 'rate_limit' => ['max' => 10, 'window' => 900]]);
