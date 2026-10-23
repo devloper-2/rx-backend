@@ -33,3 +33,13 @@ $router->get('auth/me', 'Auth', 'me', ['auth' => true]);
 $router->get('doctor/profile',          'Doctor', 'profile',        ['auth' => true]);
 $router->put('doctor/profile',          'Doctor', 'updateProfile',  ['auth' => true]);
 $router->put('doctor/change-password',  'Doctor', 'changePassword', ['auth' => true, 'rate_limit' => ['max' => 10, 'window' => 900]]);
+
+// ── Patients (JWT required) ──────────────────────────────────────────────────
+$router->get('catalog/conditions', 'Patient', 'conditions', ['auth' => true]);
+$router->get('patients',           'Patient', 'list',       ['auth' => true]);
+$router->post('patients',          'Patient', 'create',     ['auth' => true]);
+$router->get('patients/{id}',      'Patient', 'detail',     ['auth' => true]);
+$router->put('patients/{id}',      'Patient', 'update',     ['auth' => true]);
+$router->delete('patients/{id}',   'Patient', 'delete',     ['auth' => true]);
+
+$router->get('dashboard/summary', 'Doctor', 'summary', ['auth' => true]);

@@ -120,8 +120,11 @@ class Validator
 
             case 'min':
                 if ($value !== null) {
-                    if (is_string($value) && mb_strlen($value) < (int) $param) {
-                        $this->addError($field, "{$label} must be at least {$param} characters.");
+                    if (is_string($value)) {
+                        // Strings are measured by length, even digit-only ones (phone numbers).
+                        if (mb_strlen($value) < (int) $param) {
+                            $this->addError($field, "{$label} must be at least {$param} characters.");
+                        }
                     } elseif (is_numeric($value) && (float) $value < (float) $param) {
                         $this->addError($field, "{$label} must be at least {$param}.");
                     }
@@ -130,8 +133,10 @@ class Validator
 
             case 'max':
                 if ($value !== null) {
-                    if (is_string($value) && mb_strlen($value) > (int) $param) {
-                        $this->addError($field, "{$label} may not be greater than {$param} characters.");
+                    if (is_string($value)) {
+                        if (mb_strlen($value) > (int) $param) {
+                            $this->addError($field, "{$label} may not be greater than {$param} characters.");
+                        }
                     } elseif (is_numeric($value) && (float) $value > (float) $param) {
                         $this->addError($field, "{$label} may not be greater than {$param}.");
                     }

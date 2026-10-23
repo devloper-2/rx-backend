@@ -10,9 +10,22 @@ require_once ROOT_PATH . '/app/controllers/BaseController.php';
  * GET /doctor/profile          → profile()
  * PUT /doctor/profile          → updateProfile()
  * PUT /doctor/change-password  → changePassword()
+ * GET /dashboard/summary       → summary()
  */
 class DoctorController extends BaseController
 {
+    /** Numbers for the home screen. Grows as modules are added. */
+    public function summary(): void
+    {
+        $d   = (int) $this->requireDoctor()['id'];
+        $row = $this->db->getRow(
+            'SELECT COUNT(*) AS total, COALESCE(SUM(created_at >= (UTC_TIMESTAMP() - INTERVAL 7 DAY)), 0) AS this_week
+             FROM patients WHERE doctor_id = :d AND deleted_at IS NULL AND is_active = 1',
+            [':d' => $d]
+        );
+        Response::success(['patients_total' => (int) $row['total'], 'patients_this_week' => (int) $row['this_week']], 'Summary fetched');
+    }
+
     public function profile(): void
     {
         Response::success(['user' => self::publicDoctor($this->requireDoctor())], 'Profile fetched');

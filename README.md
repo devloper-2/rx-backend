@@ -34,6 +34,11 @@ All responses: `{ status, code, message, data, errors, meta }`.
 | GET | `auth/me` | JWT | current doctor |
 | GET/PUT | `doctor/profile` | JWT | read / update name, e-mail, degree, specialization, registration_no, experience_yrs |
 | PUT | `doctor/change-password` | JWT | `current_password, password` → signs out other devices, returns fresh tokens |
+| GET | `dashboard/summary` | JWT | numbers for the home screen |
+| GET | `patients?q=&page=&limit=` | JWT | the doctor's patients, search by name / mobile / UHID, newest activity first |
+| POST | `patients` | JWT | `name, sex, age_years` **or** `date_of_birth`, optional mobile, allergies, `condition_ids`, … Returns 409 + `duplicate` for the same name on the same mobile unless `force=true` |
+| GET/PUT/DELETE | `patients/{id}` | JWT | read / update / archive (soft delete). Always scoped to the signed-in doctor |
+| GET | `catalog/conditions` | JWT | chronic-condition catalogue |
 
 ## OTP delivery (important)
 
@@ -52,8 +57,12 @@ second device signs the first one out. Access token 1 h, refresh token 7 days (s
 ## Tests
 
 ```bash
-python3 tests/api_smoke.py            # 56 end-to-end checks against the running server
+python3 tests/api_smoke.py            # auth, profile, security (56 checks)
+python3 tests/api_patients.py         # patients: CRUD, search, duplicates, isolation between doctors
 ```
+
+The register endpoint is rate limited (20/hour per IP). If a run says `429`, clear the dev counters:
+`mysql -uroot php_rest_api -e "delete from rate_limits"`.
 
 It creates throw-away doctors with random mobile numbers. See `OVERNIGHT_REPORT.md` in the repo root
 for everything that was found and changed.
