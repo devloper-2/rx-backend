@@ -9,6 +9,7 @@ require_once ROOT_PATH . '/app/controllers/BaseController.php';
  *
  * GET  /catalog/medicines?q=   → medicines()      search, or "my frequently used" when q is blank
  * POST /catalog/medicines      → addMedicine()    doctor-private medicine
+ * GET  /catalog/lab-tests?q=&codes= → labTests()   search / frequently ordered / by short codes
  * GET  /catalog/symptoms       → symptoms()
  * GET  /catalog/advice         → advice()
  * GET  /catalog/diagnoses      → diagnoses()      the doctor's own recent diagnoses
@@ -103,6 +104,53 @@ class CatalogController extends BaseController
             'unit' => $this->request->get('default_unit') ?: $cat['default_unit'], 'category_id' => (int) $cat['id'],
             'category_name' => $cat['name'], 'last_used' => null,
         ]], 'Medicine added');
+    }
+
+    // ── GET /catalog/lab-tests ───────────────────────────────────────────────
+    public function labTests(): void
+    {
+        $d     = (int) $this->requireDoctor()['id'];
+        $q     = trim((string) $this->request->get('q', ''));
+        $codes = array_values(array_filter(array_map('trim', explode(',', (string) $this->request->get('codes', '')))));
+        $cols  = 'id, name, short_code, category, normal_range, unit';
+
+        if ($codes) {                                   // panel shortcuts resolve their tests by code
+            $in   = implode(',', array_fill(0, count($codes), '?'));
+            $rows = $this->db->getRows("SELECT $cols FROM lab_tests_catalog WHERE is_active = 1 AND short_code IN ($in)", $codes);
+            Response::success(['items' => array_map([self::class, 'labTest'], $rows), 'kind' => 'codes'], 'Tests fetched');
+        }
+        if ($q !== '') {
+            $like = '%' . addcslashes($q, '%_\\') . '%';
+            $rows = $this->db->getRows(
+                "SELECT $cols FROM lab_tests_catalog WHERE is_active = 1 AND (name LIKE :a OR short_code LIKE :b OR category LIKE :c)
+                 ORDER BY (short_code = :exact) DESC, (name LIKE :p) DESC, name LIMIT 40",
+                [':a' => $like, ':b' => $like, ':c' => $like, ':exact' => $q, ':p' => addcslashes($q, '%_\\') . '%']
+            );
+            Response::success(['items' => array_map([self::class, 'labTest'], $rows), 'kind' => 'search'], 'Tests fetched');
+        }
+
+        // Blank: what this doctor orders most, padded with the everyday basics.
+        $top  = $this->db->getRows(
+            "SELECT t.test_id, COUNT(*) c FROM lab_order_tests t JOIN lab_orders o ON o.id = t.lab_order_id
+             WHERE o.doctor_id = :d AND t.test_id IS NOT NULL GROUP BY t.test_id ORDER BY c DESC LIMIT 12", [':d' => $d]);
+        $ids  = array_map('intval', array_column($top, 'test_id'));
+        $basic = ['CBC', 'FBS', 'PPBS', 'HBA1C', 'LIPID', 'LFT', 'CR', 'TSH', 'URINE_RE', 'MALARIA', 'DENGUE_NS1', 'CRP'];
+        $in   = implode(',', array_fill(0, count($basic), '?'));
+        $b    = $this->db->getRows("SELECT $cols FROM lab_tests_catalog WHERE is_active = 1 AND short_code IN ($in)", $basic);
+        $byId = [];
+        if ($ids) {
+            $in2 = implode(',', array_fill(0, count($ids), '?'));
+            foreach ($this->db->getRows("SELECT $cols FROM lab_tests_catalog WHERE id IN ($in2)", $ids) as $r) $byId[(int) $r['id']] = $r;
+        }
+        $items = [];
+        foreach ($ids as $id) if (isset($byId[$id])) $items[(int) $id] = $byId[$id];
+        foreach ($b as $r) $items[(int) $r['id']] ??= $r;
+        Response::success(['items' => array_map([self::class, 'labTest'], array_values($items)), 'kind' => 'frequent'], 'Tests fetched');
+    }
+
+    private static function labTest(array $r): array
+    {
+        return ['id' => (int) $r['id'], 'name' => $r['name'], 'short_code' => $r['short_code'], 'category' => $r['category'], 'normal_range' => $r['normal_range'], 'unit' => $r['unit']];
     }
 
     // ── GET /catalog/symptoms | advice | diagnoses ───────────────────────────

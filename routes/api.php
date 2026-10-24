@@ -70,3 +70,17 @@ $router->get('appointments',                'Appointment', 'list',      ['auth' 
 $router->post('appointments',               'Appointment', 'create',    ['auth' => true]);
 $router->put('appointments/{id}',           'Appointment', 'update',    ['auth' => true]);
 $router->post('appointments/{id}/status',   'Appointment', 'setStatus', ['auth' => true]);
+
+// ── Lab & imaging orders (JWT required) ──────────────────────────────────────
+$router->get('catalog/lab-tests',                 'Catalog',       'labTests',        ['auth' => true]);
+$router->get('orders',                            'Investigation', 'list',            ['auth' => true]);
+$router->get('lab-orders/{id}',                   'Investigation', 'labDetail',       ['auth' => true]);
+$router->put('lab-orders/{id}/results',           'Investigation', 'saveLabResults',  ['auth' => true]);
+$router->post('lab-orders/{id}/status',           'Investigation', 'labStatus',       ['auth' => true]);
+$router->post('lab-orders/{id}/file',             'Investigation', 'uploadLabFile',   ['auth' => true, 'rate_limit' => ['max' => 60, 'window' => 3600]]);
+$router->get('lab-orders/{id}/file',              'Investigation', 'labFile',         ['auth' => true]);
+$router->get('radiology-orders/{id}',             'Investigation', 'radDetail',       ['auth' => true]);
+$router->put('radiology-orders/{id}/report',      'Investigation', 'saveRadReport',   ['auth' => true]);
+$router->post('radiology-orders/{id}/status',     'Investigation', 'radStatus',       ['auth' => true]);
+$router->post('radiology-orders/{id}/file',       'Investigation', 'uploadRadFile',   ['auth' => true, 'rate_limit' => ['max' => 60, 'window' => 3600]]);
+$router->get('radiology-orders/{id}/file',        'Investigation', 'radFile',         ['auth' => true]);

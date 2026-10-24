@@ -43,6 +43,14 @@ class DoctorController extends BaseController
              FROM appointments WHERE doctor_id = :d AND scheduled_at >= :s AND scheduled_at < :u",
             [':d' => $d, ':s' => gmdate('Y-m-d H:i:s', $since), ':u' => $until]
         );
+        $pending = $this->db->getRow(
+            "SELECT
+               (SELECT COUNT(*) FROM lab_orders o JOIN prescriptions p ON p.id = o.prescription_id AND p.status = 'final' AND p.deleted_at IS NULL
+                 WHERE o.doctor_id = :d1 AND o.deleted_at IS NULL AND o.status IN ('ordered','sample_collected','processing'))
+             + (SELECT COUNT(*) FROM radiology_orders o JOIN prescriptions p ON p.id = o.prescription_id AND p.status = 'final' AND p.deleted_at IS NULL
+                 WHERE o.doctor_id = :d2 AND o.deleted_at IS NULL AND o.status = 'ordered') AS n",
+            [':d1' => $d, ':d2' => $d]
+        );
         $drafts = $this->db->getRow("SELECT COUNT(*) AS n FROM prescriptions WHERE doctor_id = :d AND deleted_at IS NULL AND status = 'draft'", [':d' => $d]);
         Response::success([
             'patients_total'      => (int) $row['total'],
@@ -50,6 +58,7 @@ class DoctorController extends BaseController
             'prescriptions_total' => (int) $rx['total'],
             'prescriptions_today' => (int) $rx['today'],
             'drafts'              => (int) $drafts['n'],
+            'orders_pending'      => (int) $pending['n'],
             'queue_waiting'       => (int) $ap['waiting'],
             'queue_upcoming'      => (int) $ap['upcoming'],
             'queue_done'          => (int) $ap['done'],

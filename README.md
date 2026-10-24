@@ -10,6 +10,7 @@ Plain-PHP REST API for the Prescription Rx doctor app. Apache + `mod_rewrite` + 
    mysql -uroot php_rest_api < php_rest_api.sql
    mysql -uroot php_rest_api < migrations/sql/002_doctor_auth.sql
    mysql -uroot php_rest_api < migrations/sql/003_seed_gp_catalog.sql   # everyday GP formulary, symptoms, advice (safe to re-run)
+   mysql -uroot php_rest_api < migrations/sql/004_seed_lab_catalog.sql  # ~65 lab tests with reference ranges (safe to re-run)
    ```
 2. Make `logs/`, `uploads/` and `storage/` writable by Apache (`chmod -R a+rwX logs uploads storage` for local dev).
 3. Check `config/Config.php` (DB credentials, JWT secret). `ENV = 'local'` for development.
@@ -49,6 +50,13 @@ All responses: `{ status, code, message, data, errors, meta }`.
 | POST | `prescriptions/{id}/finalize` · `/cancel` | JWT | draft → final; final → cancelled. A finalised prescription is immutable |
 | GET | `patients/{id}/prescriptions` | JWT | a patient's history |
 | GET/PUT | `doctor/clinic` | JWT | clinic name/address printed on prescriptions |
+| GET | `catalog/lab-tests?q=&codes=` | JWT | lab test search; blank = most-ordered + everyday basics; `codes=CBC,FBS` resolves panel shortcuts |
+| GET | `orders?status=pending\|done\|all&kind=all\|lab\|imaging&patient_id=` | JWT | lab + imaging orders (final prescriptions only); urgent and oldest first when pending |
+| GET | `lab-orders/{id}` · `radiology-orders/{id}` | JWT | detail; lab tests carry the patient's **previous value** of the same test |
+| PUT | `lab-orders/{id}/results` | JWT | per-test `result_value` (+ optional `result_flag`); low/high/normal worked out from the reference range; all results in → `report_ready` |
+| PUT | `radiology-orders/{id}/report` | JWT | `impression`, `radiologist_report` |
+| POST | `lab-orders/{id}/status` · `radiology-orders/{id}/status` | JWT | validated status flow (ordered → … → report_ready → delivered, or cancelled) |
+| POST/GET | `lab-orders/{id}/file` · `radiology-orders/{id}/file` | JWT | attach / read a photo of the printed report (JPG/PNG/WebP, 5 MB) |
 | GET | `appointments?from=&to=&patient_id=&upcoming=1` | JWT | the queue / diary. `from`/`to` are UTC, so "today" follows the doctor's clock |
 | POST | `appointments` | JWT | `walk_in:true` joins the queue now (status `arrived`); otherwise `scheduled_at` books a slot. Same patient twice within 12 h → 409 + `existing` unless `force` |
 | PUT | `appointments/{id}` | JWT | reschedule / edit (only `scheduled`/`confirmed`) |
@@ -57,6 +65,12 @@ All responses: `{ status, code, message, data, errors, meta }`.
 ## Appointments and the queue
 
 A walk-in is an appointment that has already arrived, so one list answers *who is waiting*, *who is due* and *who was seen*. Creating a prescription with `appointment_id` links it; **finalising it completes the visit automatically**. `updated_at` doubles as the check-in time for "waiting 12 min".
+
+## Lab and imaging
+
+Orders are written **inside the prescription** (`investigations`: one lab order holding all tests, plus one radiology order per study) and rewritten while it is a draft; once the prescription is final they form the doctor's "awaiting results" list. Cancelling the prescription cancels orders that have no result yet.
+Reference ranges in `lab_tests_catalog` are generic adult values: the doctor can override any flag, and the lab's own range on the report prevails.
+Report photos are stored in `storage/reports/<doctor_id>/` (blocked from the web by `.htaccess`) and streamed only to the signed-in owner.
 
 ## OTP delivery (important)
 
@@ -79,6 +93,7 @@ python3 tests/api_smoke.py            # auth, profile, security (56 checks)
 python3 tests/api_patients.py         # patients: CRUD, search, duplicates, isolation between doctors
 python3 tests/api_prescriptions.py    # prescriptions, catalog, clinic: validation, immutability, isolation
 python3 tests/api_appointments.py     # queue, booking, status flow, link with prescriptions
+python3 tests/api_investigations.py   # lab/imaging orders, results + flags, status flow, private report photos
 ```
 
 The register endpoint is rate limited (20/hour per IP). If a run says `429`, clear the dev counters:

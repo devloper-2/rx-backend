@@ -1,0 +1,63 @@
+-- 004_seed_lab_catalog.sql
+-- Everyday GP investigations with generic adult reference ranges (the lab's own range on the report always prevails).
+-- Idempotent: rows whose short_code already exists are skipped.
+
+CREATE TEMPORARY TABLE _t (name VARCHAR(200), code VARCHAR(30), cat VARCHAR(100), rng VARCHAR(200), unit VARCHAR(50));
+INSERT INTO _t VALUES
+('Haemoglobin','HB','Haematology','12–17 g/dL','g/dL'),
+('Total Leucocyte Count','TLC','Haematology','4000–11000 /µL','/µL'),
+('Platelet Count','PLT','Haematology','150000–450000 /µL','/µL'),
+('ESR','ESR','Haematology','0–20 mm/hr','mm/hr'),
+('PCV (Haematocrit)','PCV','Haematology','36–50 %','%'),
+('Peripheral Blood Smear','PBS','Haematology',NULL,NULL),
+('Blood Group & Rh Factor','BG_RH','Haematology',NULL,NULL),
+('Random Blood Sugar','RBS','Biochemistry','70–140 mg/dL','mg/dL'),
+('Serum Uric Acid','URIC','Biochemistry','3.5–7.2 mg/dL','mg/dL'),
+('Total Cholesterol','CHOL','Biochemistry','<200 mg/dL','mg/dL'),
+('Serum Triglycerides','TG','Biochemistry','<150 mg/dL','mg/dL'),
+('HDL Cholesterol','HDL','Biochemistry','>40 mg/dL','mg/dL'),
+('LDL Cholesterol','LDL','Biochemistry','<100 mg/dL','mg/dL'),
+('SGOT (AST)','SGOT','Biochemistry','5–40 U/L','U/L'),
+('SGPT (ALT)','SGPT','Biochemistry','7–56 U/L','U/L'),
+('Serum Bilirubin (Total)','BILI_T','Biochemistry','0.2–1.2 mg/dL','mg/dL'),
+('Alkaline Phosphatase','ALP','Biochemistry','44–147 U/L','U/L'),
+('Total Protein','TP','Biochemistry','6.0–8.3 g/dL','g/dL'),
+('Serum Albumin','ALB','Biochemistry','3.5–5.0 g/dL','g/dL'),
+('Serum Calcium','CA','Biochemistry','8.5–10.5 mg/dL','mg/dL'),
+('Serum Phosphorus','PHOS','Biochemistry','2.5–4.5 mg/dL','mg/dL'),
+('Serum Sodium','NA','Biochemistry','135–145 mmol/L','mmol/L'),
+('Serum Potassium','K','Biochemistry','3.5–5.1 mmol/L','mmol/L'),
+('Serum Amylase','AMYL','Biochemistry','30–110 U/L','U/L'),
+('Serum Ferritin','FERR','Biochemistry','30–400 ng/mL','ng/mL'),
+('Triiodothyronine (T3)','T3','Endocrine','80–200 ng/dL','ng/dL'),
+('Thyroxine (T4)','T4','Endocrine','5.0–12.0 µg/dL','µg/dL'),
+('Vitamin D (25-OH)','VITD','Endocrine','30–100 ng/mL','ng/mL'),
+('Vitamin B12','B12','Endocrine','200–900 pg/mL','pg/mL'),
+('PSA (Total)','PSA','Endocrine','<4.0 ng/mL','ng/mL'),
+('Typhidot (IgM/IgG)','TYPHIDOT','Serology',NULL,NULL),
+('Widal Test','WIDAL','Serology',NULL,NULL),
+('Dengue IgM / IgG','DENGUE_AB','Serology',NULL,NULL),
+('HIV I & II','HIV','Serology',NULL,NULL),
+('HBsAg','HBSAG','Serology',NULL,NULL),
+('Anti-HCV','HCV','Serology',NULL,NULL),
+('VDRL / RPR','VDRL','Serology',NULL,NULL),
+('C-Reactive Protein (CRP)','CRP','Serology','<6 mg/L','mg/L'),
+('Rheumatoid Factor (RA)','RA','Serology','<14 IU/mL','IU/mL'),
+('ASO Titre','ASO','Serology','<200 IU/mL','IU/mL'),
+('Troponin I','TROP_I','Cardiac','<0.04 ng/mL','ng/mL'),
+('Urine Pregnancy Test','UPT','Urology',NULL,NULL),
+('Urine Culture & Sensitivity','URINE_CS','Microbiology',NULL,NULL),
+('Urine Microalbumin','UMA','Urology','<30 mg/L','mg/L'),
+('Stool Routine','STOOL_RE','Microbiology',NULL,NULL),
+('Stool Occult Blood','STOOL_OB','Microbiology',NULL,NULL),
+('Blood Culture & Sensitivity','BLOOD_CS','Microbiology',NULL,NULL),
+('Throat Swab Culture','THROAT_CS','Microbiology',NULL,NULL),
+('Sputum for AFB','SPUTUM_AFB','Microbiology',NULL,NULL),
+('Sputum Culture & Sensitivity','SPUTUM_CS','Microbiology',NULL,NULL),
+('COVID-19 Rapid Antigen','COVID_RAT','Microbiology',NULL,NULL),
+('Pap Smear','PAP','Cytology',NULL,NULL),
+('FNAC','FNAC','Cytology',NULL,NULL);
+INSERT INTO lab_tests_catalog (name, short_code, category, normal_range, unit, is_active)
+SELECT t.name, t.code, t.cat, t.rng, t.unit, 1 FROM _t t
+WHERE NOT EXISTS (SELECT 1 FROM lab_tests_catalog c WHERE c.short_code = t.code);
+DROP TEMPORARY TABLE _t;

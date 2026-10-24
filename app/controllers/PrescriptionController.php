@@ -64,6 +64,7 @@ class PrescriptionController extends BaseController
                 'status'     => $status,
             ] + $in['row']);
             $this->writeChildren($id, $in);
+            InvestigationHelper::save($id, (int) $doctor['id'], (int) $patient['id'], $in['investigations']);
             $this->touchPatient((int) $patient['id']);
             if ($appointment) {
                 $this->db->update('appointments', ['prescription_id' => $id], 'id = :a', [':a' => $appointment['id']]);
@@ -99,6 +100,7 @@ class PrescriptionController extends BaseController
             $this->db->update('prescriptions', ['visit_date' => $in['visit_date'], 'status' => $status] + $in['row'], 'id = :id', [':id' => $id]);
             $this->clearChildren($id);
             $this->writeChildren($id, $in);
+            InvestigationHelper::save($id, (int) $doctor['id'], (int) $rx['patient_id'], $in['investigations']);
             $this->touchPatient((int) $rx['patient_id']);
             if ($status === 'final') $this->completeAppointment($id);
             $this->db->commit();
@@ -118,7 +120,7 @@ class PrescriptionController extends BaseController
         $this->assertDraft($rx);
 
         $full = $this->load($id, (int) $doctor['id']);
-        if (!$full['diagnosis'] && !$full['chief_complaint'] && !$full['medicines']) {
+        if (!$full['diagnosis'] && !$full['chief_complaint'] && !$full['medicines'] && !$full['investigations']['lab'] && !$full['investigations']['imaging']) {
             Response::validationError(['prescription' => ['Add a diagnosis, complaint or at least one medicine first.']]);
         }
         $this->db->update('prescriptions', ['status' => 'final'], 'id = :id', [':id' => $id]);
@@ -137,6 +139,7 @@ class PrescriptionController extends BaseController
             Response::error('Only a finalised prescription can be cancelled.', 409);
         }
         $this->db->update('prescriptions', ['status' => 'cancelled'], 'id = :id', [':id' => $id]);
+        InvestigationHelper::cancelFor($id);
         Response::success(['prescription' => $this->load($id, (int) $doctor['id'])], 'Prescription cancelled');
     }
 
@@ -148,6 +151,7 @@ class PrescriptionController extends BaseController
         $rx     = $this->rowOrFail($id, (int) $doctor['id']);
         $this->assertDraft($rx, 'Only drafts can be deleted. Cancel a finalised prescription instead.');
         $this->db->update('prescriptions', ['deleted_at' => CommonHelper::now()], 'id = :id', [':id' => $id]);
+        InvestigationHelper::cancelFor($id);
         Response::success([], 'Draft deleted');
     }
 
@@ -255,10 +259,11 @@ class PrescriptionController extends BaseController
         $meds    = $this->parseMedicines($err);
         $symp    = $this->parseSymptoms($err);
         $advice  = $this->parseAdvice($err);
+        $inv     = InvestigationHelper::parse($this->request->get('investigations'), $err);
 
         if ($err) Response::validationError($err);
 
-        return ['row' => $row, 'visit_date' => gmdate('Y-m-d H:i:s', $vt), 'medicines' => $meds, 'symptoms' => $symp, 'advice' => $advice];
+        return ['row' => $row, 'visit_date' => gmdate('Y-m-d H:i:s', $vt), 'medicines' => $meds, 'symptoms' => $symp, 'advice' => $advice, 'investigations' => $inv];
     }
 
     private function limited(string $key, int $max, array &$err): ?string
@@ -419,7 +424,7 @@ class PrescriptionController extends BaseController
 
     private function assertHasContent(array $in): void
     {
-        if (!$in['row']['diagnosis'] && !$in['row']['chief_complaint'] && !$in['medicines'] && !$in['symptoms']) {
+        if (!$in['row']['diagnosis'] && !$in['row']['chief_complaint'] && !$in['medicines'] && !$in['symptoms'] && InvestigationHelper::isEmpty($in['investigations'])) {
             Response::validationError(['prescription' => ['Add a diagnosis, complaint or at least one medicine before saving.']]);
         }
     }
@@ -551,6 +556,7 @@ class PrescriptionController extends BaseController
                 'id' => (int) $a['id'], 'template_id' => $a['template_id'] === null ? null : (int) $a['template_id'],
                 'category' => $a['category'], 'text' => $a['template_text'] ?? $a['custom_text'],
             ], $adv),
+            'investigations' => InvestigationHelper::forPrescription($id),
             'followup_date' => $rx['followup_date'], 'followup_note' => $rx['followup_note'],
             'created_at' => $rx['created_at'],
         ];
