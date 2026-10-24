@@ -271,7 +271,7 @@ class PatientController extends BaseController
     }
 
     /** "3 m", "8 y" — months for babies, otherwise years. */
-    private static function ageLabel(array $p): ?string
+    public static function ageLabel(array $p): ?string
     {
         $dob = $p['date_of_birth'] ?? null;
         if ($dob && $dob !== '0000-00-00' && ($ts = strtotime($dob)) !== false) {
@@ -282,7 +282,7 @@ class PatientController extends BaseController
         return $p['age_years'] === null ? null : $p['age_years'] . ' y';
     }
 
-    private static function publicPatient(array $p): array
+    public static function publicPatient(array $p): array
     {
         $dobOk = !empty($p['date_of_birth']) && $p['date_of_birth'] !== '0000-00-00';
         return [

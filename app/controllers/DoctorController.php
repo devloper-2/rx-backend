@@ -11,10 +11,14 @@ require_once ROOT_PATH . '/app/controllers/BaseController.php';
  * PUT /doctor/profile          → updateProfile()
  * PUT /doctor/change-password  → changePassword()
  * GET /dashboard/summary       → summary()
+ * GET/PUT /doctor/clinic       → clinic() / updateClinic()
  */
 class DoctorController extends BaseController
 {
-    /** Numbers for the home screen. Grows as modules are added. */
+    /**
+     * Numbers for the home screen. `since` (UTC datetime) is the start of the
+     * doctor's local day, so "today" follows their clock, not the server's.
+     */
     public function summary(): void
     {
         $d   = (int) $this->requireDoctor()['id'];
@@ -23,7 +27,77 @@ class DoctorController extends BaseController
              FROM patients WHERE doctor_id = :d AND deleted_at IS NULL AND is_active = 1',
             [':d' => $d]
         );
-        Response::success(['patients_total' => (int) $row['total'], 'patients_this_week' => (int) $row['this_week']], 'Summary fetched');
+        $since = strtotime((string) $this->request->get('since', ''));
+        $since = $since === false ? strtotime('today') : $since;
+        $rx = $this->db->getRow(
+            "SELECT COUNT(*) AS total, COALESCE(SUM(visit_date >= :s), 0) AS today
+             FROM prescriptions WHERE doctor_id = :d AND deleted_at IS NULL AND status = 'final'",
+            [':d' => $d, ':s' => gmdate('Y-m-d H:i:s', $since)]
+        );
+        $drafts = $this->db->getRow("SELECT COUNT(*) AS n FROM prescriptions WHERE doctor_id = :d AND deleted_at IS NULL AND status = 'draft'", [':d' => $d]);
+        Response::success([
+            'patients_total'      => (int) $row['total'],
+            'patients_this_week'  => (int) $row['this_week'],
+            'prescriptions_total' => (int) $rx['total'],
+            'prescriptions_today' => (int) $rx['today'],
+            'drafts'              => (int) $drafts['n'],
+        ], 'Summary fetched');
+    }
+
+    // ── Clinic (printed on every prescription) ───────────────────────────────
+    public function clinic(): void
+    {
+        $d = (int) $this->requireDoctor()['id'];
+        Response::success(['clinic' => self::publicClinic($this->primaryClinic($d))], 'Clinic fetched');
+    }
+
+    public function updateClinic(): void
+    {
+        $d = (int) $this->requireDoctor()['id'];
+        $this->validate([
+            'name'          => 'required|string|min:2|max:200',
+            'address_line1' => 'nullable|string|max:255',
+            'address_line2' => 'nullable|string|max:255',
+            'city'          => 'nullable|string|max:100',
+            'state'         => 'nullable|string|max:100',
+            'pincode'       => 'nullable|string|max:10',
+            'phone'         => 'nullable|string|max:20',
+            'timings'       => 'nullable|string|max:500',
+        ]);
+        $opt = fn (string $k) => ($v = self::clean((string) ($this->request->get($k) ?? ''))) === '' ? null : $v;
+        $name = self::clean((string) $this->request->get('name'));
+        if (mb_strlen($name) < 2) {
+            Response::validationError(['name' => ['Please enter the clinic name.']]);
+        }
+        $data = ['name' => $name] + array_combine(
+            ['address_line1', 'address_line2', 'city', 'state', 'pincode', 'phone', 'timings'],
+            array_map($opt, ['address_line1', 'address_line2', 'city', 'state', 'pincode', 'phone', 'timings'])
+        );
+
+        $existing = $this->primaryClinic($d);
+        if ($existing) {
+            $this->db->update('clinics', $data, 'id = :id', [':id' => $existing['id']]);
+        } else {
+            $this->db->insert('clinics', $data + ['doctor_id' => $d, 'is_primary' => 1]);
+        }
+        Response::success(['clinic' => self::publicClinic($this->primaryClinic($d))], 'Clinic saved');
+    }
+
+    private function primaryClinic(int $doctorId): ?array
+    {
+        return $this->db->getRow(
+            'SELECT * FROM clinics WHERE doctor_id = :d AND deleted_at IS NULL ORDER BY is_primary DESC, id ASC LIMIT 1',
+            [':d' => $doctorId]
+        );
+    }
+
+    private static function publicClinic(?array $c): ?array
+    {
+        if (!$c) return null;
+        return [
+            'name' => $c['name'], 'address_line1' => $c['address_line1'], 'address_line2' => $c['address_line2'],
+            'city' => $c['city'], 'state' => $c['state'], 'pincode' => $c['pincode'], 'phone' => $c['phone'], 'timings' => $c['timings'],
+        ];
     }
 
     public function profile(): void

@@ -9,6 +9,7 @@ Plain-PHP REST API for the Prescription Rx doctor app. Apache + `mod_rewrite` + 
    mysql -uroot -e "CREATE DATABASE php_rest_api CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
    mysql -uroot php_rest_api < php_rest_api.sql
    mysql -uroot php_rest_api < migrations/sql/002_doctor_auth.sql
+   mysql -uroot php_rest_api < migrations/sql/003_seed_gp_catalog.sql   # everyday GP formulary, symptoms, advice (safe to re-run)
    ```
 2. Make `logs/`, `uploads/` and `storage/` writable by Apache (`chmod -R a+rwX logs uploads storage` for local dev).
 3. Check `config/Config.php` (DB credentials, JWT secret). `ENV = 'local'` for development.
@@ -39,6 +40,15 @@ All responses: `{ status, code, message, data, errors, meta }`.
 | POST | `patients` | JWT | `name, sex, age_years` **or** `date_of_birth`, optional mobile, allergies, `condition_ids`, … Returns 409 + `duplicate` for the same name on the same mobile unless `force=true` |
 | GET/PUT/DELETE | `patients/{id}` | JWT | read / update / archive (soft delete). Always scoped to the signed-in doctor |
 | GET | `catalog/conditions` | JWT | chronic-condition catalogue |
+| GET | `catalog/medicines?q=` | JWT | formulary search; blank `q` returns *this doctor's frequently used* medicines. Every item carries `last_used` (schedule, duration, instructions) to pre-fill the editor |
+| POST | `catalog/medicines` | JWT | add a doctor-private medicine |
+| GET | `catalog/symptoms`, `catalog/advice`, `catalog/diagnoses` | JWT | picker data; diagnoses = the doctor's own most used |
+| POST | `prescriptions` | JWT | `patient_id`, `status` (draft\|final), vitals, `chief_complaint`, `symptoms[]`, `diagnosis`, `medicines[]` (dose slots), `advice[]`, `followup_date`. BMI and totals are computed server-side |
+| GET | `prescriptions?since=&status=&page=` | JWT | recent prescriptions across patients |
+| GET/PUT/DELETE | `prescriptions/{id}` | JWT | read; **edit/delete drafts only** (`PUT` with `status=final` saves and finalises in one step) |
+| POST | `prescriptions/{id}/finalize` · `/cancel` | JWT | draft → final; final → cancelled. A finalised prescription is immutable |
+| GET | `patients/{id}/prescriptions` | JWT | a patient's history |
+| GET/PUT | `doctor/clinic` | JWT | clinic name/address printed on prescriptions |
 
 ## OTP delivery (important)
 
@@ -59,6 +69,7 @@ second device signs the first one out. Access token 1 h, refresh token 7 days (s
 ```bash
 python3 tests/api_smoke.py            # auth, profile, security (56 checks)
 python3 tests/api_patients.py         # patients: CRUD, search, duplicates, isolation between doctors
+python3 tests/api_prescriptions.py    # prescriptions, catalog, clinic: validation, immutability, isolation
 ```
 
 The register endpoint is rate limited (20/hour per IP). If a run says `429`, clear the dev counters:

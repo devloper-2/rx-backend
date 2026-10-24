@@ -43,3 +43,24 @@ $router->put('patients/{id}',      'Patient', 'update',     ['auth' => true]);
 $router->delete('patients/{id}',   'Patient', 'delete',     ['auth' => true]);
 
 $router->get('dashboard/summary', 'Doctor', 'summary', ['auth' => true]);
+
+// ── Catalog for the prescription editor (JWT required) ───────────────────────
+$router->get('catalog/medicines',  'Catalog', 'medicines',    ['auth' => true]);
+$router->post('catalog/medicines', 'Catalog', 'addMedicine',  ['auth' => true, 'rate_limit' => ['max' => 60, 'window' => 3600]]);
+$router->get('catalog/symptoms',   'Catalog', 'symptoms',     ['auth' => true]);
+$router->get('catalog/advice',     'Catalog', 'advice',       ['auth' => true]);
+$router->get('catalog/diagnoses',  'Catalog', 'diagnoses',    ['auth' => true]);
+
+// ── Prescriptions (JWT required) ─────────────────────────────────────────────
+$router->post('prescriptions',                 'Prescription', 'create',   ['auth' => true]);
+$router->get('prescriptions',                  'Prescription', 'list',     ['auth' => true]);
+$router->get('prescriptions/{id}',             'Prescription', 'detail',   ['auth' => true]);
+$router->put('prescriptions/{id}',             'Prescription', 'update',   ['auth' => true]);
+$router->delete('prescriptions/{id}',          'Prescription', 'delete',   ['auth' => true]);
+$router->post('prescriptions/{id}/finalize',   'Prescription', 'finalize', ['auth' => true]);
+$router->post('prescriptions/{id}/cancel',     'Prescription', 'cancel',   ['auth' => true]);
+$router->get('patients/{id}/prescriptions',    'Prescription', 'forPatient', ['auth' => true]);
+
+// ── Clinic (letterhead) ──────────────────────────────────────────────────────
+$router->get('doctor/clinic', 'Doctor', 'clinic',       ['auth' => true]);
+$router->put('doctor/clinic', 'Doctor', 'updateClinic', ['auth' => true]);
