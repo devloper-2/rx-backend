@@ -52,6 +52,7 @@ class PrescriptionController extends BaseController
         }
         if ($status === 'final') $this->assertHasContent($in);
 
+        $appointment = $this->ownAppointment((int) $this->request->get('appointment_id'), (int) $doctor['id'], (int) $patient['id']);
         $clinic = $this->primaryClinic((int) $doctor['id']);
         $this->db->beginTransaction();
         try {
@@ -64,6 +65,10 @@ class PrescriptionController extends BaseController
             ] + $in['row']);
             $this->writeChildren($id, $in);
             $this->touchPatient((int) $patient['id']);
+            if ($appointment) {
+                $this->db->update('appointments', ['prescription_id' => $id], 'id = :a', [':a' => $appointment['id']]);
+            }
+            if ($status === 'final') $this->completeAppointment($id);
             $this->db->commit();
         } catch (Throwable $e) {
             $this->db->rollback();
@@ -95,6 +100,7 @@ class PrescriptionController extends BaseController
             $this->clearChildren($id);
             $this->writeChildren($id, $in);
             $this->touchPatient((int) $rx['patient_id']);
+            if ($status === 'final') $this->completeAppointment($id);
             $this->db->commit();
         } catch (Throwable $e) {
             $this->db->rollback();
@@ -117,6 +123,7 @@ class PrescriptionController extends BaseController
         }
         $this->db->update('prescriptions', ['status' => 'final'], 'id = :id', [':id' => $id]);
         $this->touchPatient((int) $rx['patient_id']);
+        $this->completeAppointment($id);
         Response::success(['prescription' => $this->load($id, (int) $doctor['id'])], 'Prescription saved');
     }
 
@@ -436,6 +443,24 @@ class PrescriptionController extends BaseController
     private function touchPatient(int $patientId): void
     {
         $this->db->update('patients', ['updated_at' => CommonHelper::now()], 'id = :id', [':id' => $patientId]);
+    }
+
+    /** An open appointment of this patient that a new prescription may be attached to (or null). */
+    private function ownAppointment(int $id, int $doctorId, int $patientId): ?array
+    {
+        if ($id <= 0) return null;
+        $a = $this->db->getRow(
+            "SELECT id FROM appointments WHERE id = :i AND doctor_id = :d AND patient_id = :p AND status IN ('scheduled','confirmed','arrived')",
+            [':i' => $id, ':d' => $doctorId, ':p' => $patientId]
+        );
+        if (!$a) Response::validationError(['appointment_id' => ['That appointment is no longer open.']]);
+        return $a;
+    }
+
+    /** Seeing the patient and finalising the prescription closes the visit. */
+    private function completeAppointment(int $prescriptionId): void
+    {
+        $this->db->update('appointments', ['status' => 'completed'], "prescription_id = :r AND status IN ('scheduled','confirmed','arrived')", [':r' => $prescriptionId]);
     }
 
     private function ownPatient(int $id, int $doctorId): array

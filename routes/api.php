@@ -64,3 +64,9 @@ $router->get('patients/{id}/prescriptions',    'Prescription', 'forPatient', ['a
 // ── Clinic (letterhead) ──────────────────────────────────────────────────────
 $router->get('doctor/clinic', 'Doctor', 'clinic',       ['auth' => true]);
 $router->put('doctor/clinic', 'Doctor', 'updateClinic', ['auth' => true]);
+
+// ── Appointments / today's queue (JWT required) ──────────────────────────────
+$router->get('appointments',                'Appointment', 'list',      ['auth' => true]);
+$router->post('appointments',               'Appointment', 'create',    ['auth' => true]);
+$router->put('appointments/{id}',           'Appointment', 'update',    ['auth' => true]);
+$router->post('appointments/{id}/status',   'Appointment', 'setStatus', ['auth' => true]);

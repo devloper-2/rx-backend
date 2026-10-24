@@ -49,6 +49,14 @@ All responses: `{ status, code, message, data, errors, meta }`.
 | POST | `prescriptions/{id}/finalize` · `/cancel` | JWT | draft → final; final → cancelled. A finalised prescription is immutable |
 | GET | `patients/{id}/prescriptions` | JWT | a patient's history |
 | GET/PUT | `doctor/clinic` | JWT | clinic name/address printed on prescriptions |
+| GET | `appointments?from=&to=&patient_id=&upcoming=1` | JWT | the queue / diary. `from`/`to` are UTC, so "today" follows the doctor's clock |
+| POST | `appointments` | JWT | `walk_in:true` joins the queue now (status `arrived`); otherwise `scheduled_at` books a slot. Same patient twice within 12 h → 409 + `existing` unless `force` |
+| PUT | `appointments/{id}` | JWT | reschedule / edit (only `scheduled`/`confirmed`) |
+| POST | `appointments/{id}/status` | JWT | `confirmed`, `arrived`, `cancelled` (+`cancel_reason`), `no_show`, `completed`; only valid transitions are accepted |
+
+## Appointments and the queue
+
+A walk-in is an appointment that has already arrived, so one list answers *who is waiting*, *who is due* and *who was seen*. Creating a prescription with `appointment_id` links it; **finalising it completes the visit automatically**. `updated_at` doubles as the check-in time for "waiting 12 min".
 
 ## OTP delivery (important)
 
@@ -70,6 +78,7 @@ second device signs the first one out. Access token 1 h, refresh token 7 days (s
 python3 tests/api_smoke.py            # auth, profile, security (56 checks)
 python3 tests/api_patients.py         # patients: CRUD, search, duplicates, isolation between doctors
 python3 tests/api_prescriptions.py    # prescriptions, catalog, clinic: validation, immutability, isolation
+python3 tests/api_appointments.py     # queue, booking, status flow, link with prescriptions
 ```
 
 The register endpoint is rate limited (20/hour per IP). If a run says `429`, clear the dev counters:

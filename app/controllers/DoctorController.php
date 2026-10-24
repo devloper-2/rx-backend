@@ -34,6 +34,15 @@ class DoctorController extends BaseController
              FROM prescriptions WHERE doctor_id = :d AND deleted_at IS NULL AND status = 'final'",
             [':d' => $d, ':s' => gmdate('Y-m-d H:i:s', $since)]
         );
+        $until = gmdate('Y-m-d H:i:s', $since + 86400);
+        $ap = $this->db->getRow(
+            "SELECT COALESCE(SUM(status = 'arrived'), 0) AS waiting,
+                    COALESCE(SUM(status IN ('scheduled','confirmed')), 0) AS upcoming,
+                    COALESCE(SUM(status = 'completed'), 0) AS done,
+                    COALESCE(SUM(status <> 'cancelled'), 0) AS total
+             FROM appointments WHERE doctor_id = :d AND scheduled_at >= :s AND scheduled_at < :u",
+            [':d' => $d, ':s' => gmdate('Y-m-d H:i:s', $since), ':u' => $until]
+        );
         $drafts = $this->db->getRow("SELECT COUNT(*) AS n FROM prescriptions WHERE doctor_id = :d AND deleted_at IS NULL AND status = 'draft'", [':d' => $d]);
         Response::success([
             'patients_total'      => (int) $row['total'],
@@ -41,6 +50,10 @@ class DoctorController extends BaseController
             'prescriptions_total' => (int) $rx['total'],
             'prescriptions_today' => (int) $rx['today'],
             'drafts'              => (int) $drafts['n'],
+            'queue_waiting'       => (int) $ap['waiting'],
+            'queue_upcoming'      => (int) $ap['upcoming'],
+            'queue_done'          => (int) $ap['done'],
+            'appointments_today'  => (int) $ap['total'],
         ], 'Summary fetched');
     }
 
