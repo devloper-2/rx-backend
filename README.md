@@ -11,6 +11,7 @@ Plain-PHP REST API for the Prescription Rx doctor app. Apache + `mod_rewrite` + 
    mysql -uroot php_rest_api < migrations/sql/002_doctor_auth.sql
    mysql -uroot php_rest_api < migrations/sql/003_seed_gp_catalog.sql   # everyday GP formulary, symptoms, advice (safe to re-run)
    mysql -uroot php_rest_api < migrations/sql/004_seed_lab_catalog.sql  # ~65 lab tests with reference ranges (safe to re-run)
+   mysql -uroot php_rest_api < migrations/sql/005_followup_actions.sql # snoozed / dismissed follow-up items
    ```
 2. Make `logs/`, `uploads/` and `storage/` writable by Apache (`chmod -R a+rwX logs uploads storage` for local dev).
 3. Check `config/Config.php` (DB credentials, JWT secret). `ENV = 'local'` for development.
@@ -61,6 +62,9 @@ All responses: `{ status, code, message, data, errors, meta }`.
 | POST | `appointments` | JWT | `walk_in:true` joins the queue now (status `arrived`); otherwise `scheduled_at` books a slot. Same patient twice within 12 h → 409 + `existing` unless `force` |
 | PUT | `appointments/{id}` | JWT | reschedule / edit (only `scheduled`/`confirmed`) |
 | POST | `appointments/{id}/status` | JWT | `confirmed`, `arrived`, `cancelled` (+`cancel_reason`), `no_show`, `completed`; only valid transitions are accepted |
+| GET | `followups?today=YYYY-MM-DD` | JWT | "Needs attention": `followups`, `refills`, `results_to_review`, `pending_results`, `missed` + total `attention`. `today` is the doctor's local date |
+| POST | `followups/dismiss` | JWT | `kind, ref_id, days?` — snooze for `days` (1–365) or remove for good |
+| POST | `reminders` | JWT | `kind (followup\|refill\|missed), ref_id, message` — logs a reminder the doctor sent from WhatsApp in `wa_notifications` |
 
 ## Appointments and the queue
 
@@ -94,6 +98,7 @@ python3 tests/api_patients.py         # patients: CRUD, search, duplicates, isol
 python3 tests/api_prescriptions.py    # prescriptions, catalog, clinic: validation, immutability, isolation
 python3 tests/api_appointments.py     # queue, booking, status flow, link with prescriptions
 python3 tests/api_investigations.py   # lab/imaging orders, results + flags, status flow, private report photos
+python3 tests/api_followups.py        # needs-attention lists, reminders, snooze, isolation (back-dates rows with the mysql CLI)
 ```
 
 The register endpoint is rate limited (20/hour per IP). If a run says `429`, clear the dev counters:

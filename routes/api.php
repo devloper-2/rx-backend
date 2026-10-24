@@ -70,6 +70,9 @@ $router->get('appointments',                'Appointment', 'list',      ['auth' 
 $router->post('appointments',               'Appointment', 'create',    ['auth' => true]);
 $router->put('appointments/{id}',           'Appointment', 'update',    ['auth' => true]);
 $router->post('appointments/{id}/status',   'Appointment', 'setStatus', ['auth' => true]);
+$router->get('followups',           'Followup', 'index',   ['auth' => true]);
+$router->post('followups/dismiss',  'Followup', 'dismiss', ['auth' => true]);
+$router->post('reminders',          'Followup', 'remind',  ['auth' => true]);
 
 // ── Lab & imaging orders (JWT required) ──────────────────────────────────────
 $router->get('catalog/lab-tests',                 'Catalog',       'labTests',        ['auth' => true]);

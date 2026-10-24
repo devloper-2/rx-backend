@@ -63,6 +63,7 @@ class DoctorController extends BaseController
             'queue_upcoming'      => (int) $ap['upcoming'],
             'queue_done'          => (int) $ap['done'],
             'appointments_today'  => (int) $ap['total'],
+            'attention'           => FollowupHelper::compute($d, (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $this->request->get('today', '')) ? (string) $this->request->get('today') : gmdate('Y-m-d')))['attention'],
         ], 'Summary fetched');
     }
 
