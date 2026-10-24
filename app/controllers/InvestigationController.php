@@ -341,6 +341,9 @@ class InvestigationController extends BaseController
         if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) throw new RuntimeException('Could not create the reports folder.');
         $name = bin2hex(random_bytes(16)) . '.' . self::FILE_MIME[$mime];
         if (!move_uploaded_file($f['tmp_name'], "$dir/$name")) throw new RuntimeException('Could not save the uploaded file.');
+        // Group-readable/writable so the deploy user (not only the web server) can manage or clean up files.
+        @chmod("$dir/$name", 0664);
+        @chmod($dir, 0775);
 
         if ($old) $this->removeFile($old);
         return "reports/$doctorId/$name";
