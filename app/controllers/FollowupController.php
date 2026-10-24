@@ -70,7 +70,7 @@ class FollowupController extends BaseController
              VALUES (:d, :p, :t, :r, :tpl, :m, :b, 'sent', UTC_TIMESTAMP())",
             [':d' => $d, ':p' => $row['patient_id'], ':t' => $type, ':r' => $ref, ':tpl' => $template, ':m' => substr((string) $row['mobile'], 0, 15), ':b' => $msg]
         );
-        Response::success(['kind' => $kind, 'ref_id' => $ref, 'reminded_at' => gmdate('Y-m-d H:i:s')], 'Reminder logged', []);
+        Response::success(['kind' => $kind, 'ref_id' => $ref, 'reminded_at' => gmdate('Y-m-d H:i:s')], 'Reminder logged');
     }
 
     private function today(): string

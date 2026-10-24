@@ -52,7 +52,9 @@ class DoctorController extends BaseController
             [':d1' => $d, ':d2' => $d]
         );
         $drafts = $this->db->getRow("SELECT COUNT(*) AS n FROM prescriptions WHERE doctor_id = :d AND deleted_at IS NULL AND status = 'draft'", [':d' => $d]);
+        $coll = $this->db->getRow('SELECT COALESCE(SUM(amount), 0) AS n FROM bill_payments WHERE doctor_id = :d AND paid_at >= :s AND paid_at < :u', [':d' => $d, ':s' => gmdate('Y-m-d H:i:s', $since), ':u' => $until]);
         Response::success([
+            'collected_today'     => (float) $coll['n'],
             'patients_total'      => (int) $row['total'],
             'patients_this_week'  => (int) $row['this_week'],
             'prescriptions_total' => (int) $rx['total'],
@@ -87,6 +89,10 @@ class DoctorController extends BaseController
             'phone'         => 'nullable|string|max:20',
             'timings'       => 'nullable|string|max:500',
         ]);
+        $fee = $this->request->get('consultation_fee');
+        if ($fee !== null && $fee !== '' && (!is_numeric($fee) || (float) $fee < 0 || (float) $fee > 1000000)) {
+            Response::validationError(['consultation_fee' => ['Enter a fee between 0 and 10,00,000.']]);
+        }
         $opt = fn (string $k) => ($v = self::clean((string) ($this->request->get($k) ?? ''))) === '' ? null : $v;
         $name = self::clean((string) $this->request->get('name'));
         if (mb_strlen($name) < 2) {
@@ -96,6 +102,8 @@ class DoctorController extends BaseController
             ['address_line1', 'address_line2', 'city', 'state', 'pincode', 'phone', 'timings'],
             array_map($opt, ['address_line1', 'address_line2', 'city', 'state', 'pincode', 'phone', 'timings'])
         );
+
+        $data['consultation_fee'] = ($fee === null || $fee === '') ? null : round((float) $fee, 2);
 
         $existing = $this->primaryClinic($d);
         if ($existing) {
@@ -120,6 +128,7 @@ class DoctorController extends BaseController
         return [
             'name' => $c['name'], 'address_line1' => $c['address_line1'], 'address_line2' => $c['address_line2'],
             'city' => $c['city'], 'state' => $c['state'], 'pincode' => $c['pincode'], 'phone' => $c['phone'], 'timings' => $c['timings'],
+            'consultation_fee' => $c['consultation_fee'] === null ? null : (float) $c['consultation_fee'],
         ];
     }
 

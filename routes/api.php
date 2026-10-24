@@ -73,6 +73,16 @@ $router->post('appointments/{id}/status',   'Appointment', 'setStatus', ['auth' 
 $router->get('followups',           'Followup', 'index',   ['auth' => true]);
 $router->post('followups/dismiss',  'Followup', 'dismiss', ['auth' => true]);
 $router->post('reminders',          'Followup', 'remind',  ['auth' => true]);
+$router->get('doctor/hours',            'Clinic', 'hours',         ['auth' => true]);
+$router->put('doctor/hours',            'Clinic', 'saveHours',     ['auth' => true]);
+$router->post('doctor/holidays',        'Clinic', 'addHoliday',    ['auth' => true]);
+$router->delete('doctor/holidays/{id}', 'Clinic', 'deleteHoliday', ['auth' => true]);
+$router->get('bills',                   'Bill', 'index',   ['auth' => true]);
+$router->get('bills/summary',           'Bill', 'summary', ['auth' => true]);
+$router->post('bills',                  'Bill', 'create',  ['auth' => true]);
+$router->get('bills/{id}',              'Bill', 'show',    ['auth' => true]);
+$router->post('bills/{id}/payment',     'Bill', 'pay',     ['auth' => true]);
+$router->post('bills/{id}/cancel',      'Bill', 'cancel',  ['auth' => true]);
 
 // ── Lab & imaging orders (JWT required) ──────────────────────────────────────
 $router->get('catalog/lab-tests',                 'Catalog',       'labTests',        ['auth' => true]);

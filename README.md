@@ -12,6 +12,7 @@ Plain-PHP REST API for the Prescription Rx doctor app. Apache + `mod_rewrite` + 
    mysql -uroot php_rest_api < migrations/sql/003_seed_gp_catalog.sql   # everyday GP formulary, symptoms, advice (safe to re-run)
    mysql -uroot php_rest_api < migrations/sql/004_seed_lab_catalog.sql  # ~65 lab tests with reference ranges (safe to re-run)
    mysql -uroot php_rest_api < migrations/sql/005_followup_actions.sql # snoozed / dismissed follow-up items
+   mysql -uroot php_rest_api < migrations/sql/006_hours_and_billing.sql # opening hours, holidays, fee, bills (safe to re-run)
    ```
 2. Make `logs/`, `uploads/` and `storage/` writable by Apache (`chmod -R a+rwX logs uploads storage` for local dev).
 3. Check `config/Config.php` (DB credentials, JWT secret). `ENV = 'local'` for development.
@@ -65,6 +66,12 @@ All responses: `{ status, code, message, data, errors, meta }`.
 | GET | `followups?today=YYYY-MM-DD` | JWT | "Needs attention": `followups`, `refills`, `results_to_review`, `pending_results`, `missed` + total `attention`. `today` is the doctor's local date |
 | POST | `followups/dismiss` | JWT | `kind, ref_id, days?` — snooze for `days` (1–365) or remove for good |
 | POST | `reminders` | JWT | `kind (followup\|refill\|missed), ref_id, message` — logs a reminder the doctor sent from WhatsApp in `wa_notifications` |
+| GET/PUT | `doctor/hours` | JWT | weekly opening hours: `days:[{day:0-6 (0=Sun), sessions:[{open:"09:00",close:"13:00"}]}]`, max 2 sessions/day; PUT replaces the week. Needs a saved clinic |
+| POST/DELETE | `doctor/holidays` · `doctor/holidays/{id}` | JWT | `date, reason?` — days the clinic is closed |
+| POST | `bills` | JWT | `patient_id, prescription_id?, items:[{description,amount}], discount?, paid?, method?` — status is worked out (unpaid / partial / paid); billing a prescription twice → 409 unless `force` |
+| GET | `bills?from=&to=&status=all\|unpaid\|paid&patient_id=` · `bills/{id}` | JWT | list / detail with items and payments |
+| POST | `bills/{id}/payment` · `bills/{id}/cancel` | JWT | `amount, method` part-payments; cancelling removes the bill's money from the collection |
+| GET | `bills/summary?from=&to=` | JWT | collected (by payment date, split by method), billed, outstanding |
 
 ## Appointments and the queue
 
@@ -98,6 +105,7 @@ python3 tests/api_patients.py         # patients: CRUD, search, duplicates, isol
 python3 tests/api_prescriptions.py    # prescriptions, catalog, clinic: validation, immutability, isolation
 python3 tests/api_appointments.py     # queue, booking, status flow, link with prescriptions
 python3 tests/api_investigations.py   # lab/imaging orders, results + flags, status flow, private report photos
+python3 tests/api_clinic_billing.py   # hours, holidays, fee, bills, part-payments, collection, isolation
 python3 tests/api_followups.py        # needs-attention lists, reminders, snooze, isolation (back-dates rows with the mysql CLI)
 ```
 
