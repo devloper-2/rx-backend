@@ -43,6 +43,7 @@ $router->put('patients/{id}',      'Patient', 'update',     ['auth' => true]);
 $router->delete('patients/{id}',   'Patient', 'delete',     ['auth' => true]);
 
 $router->get('dashboard/summary', 'Doctor', 'summary', ['auth' => true]);
+$router->get('insights', 'Insights', 'index', ['auth' => true]);
 
 // ── Catalog for the prescription editor (JWT required) ───────────────────────
 $router->get('catalog/medicines',  'Catalog', 'medicines',    ['auth' => true]);

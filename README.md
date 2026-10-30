@@ -72,6 +72,7 @@ All responses: `{ status, code, message, data, errors, meta }`.
 | GET | `bills?from=&to=&status=all\|unpaid\|paid&patient_id=` · `bills/{id}` | JWT | list / detail with items and payments |
 | POST | `bills/{id}/payment` · `bills/{id}/cancel` | JWT | `amount, method` part-payments; cancelling removes the bill's money from the collection |
 | GET | `bills/summary?from=&to=` | JWT | collected (by payment date, split by method), billed, outstanding |
+| GET | `insights?days=7\|30\|90&today=&tz_offset=` | JWT | totals vs the previous period, 8 weekly bars, top diagnoses / medicines, weekdays, sex split, chronic patients not seen in 90+ days. `tz_offset` = minutes east of UTC |
 
 ## Appointments and the queue
 
@@ -106,6 +107,7 @@ python3 tests/api_prescriptions.py    # prescriptions, catalog, clinic: validati
 python3 tests/api_appointments.py     # queue, booking, status flow, link with prescriptions
 python3 tests/api_investigations.py   # lab/imaging orders, results + flags, status flow, private report photos
 python3 tests/api_clinic_billing.py   # hours, holidays, fee, bills, part-payments, collection, isolation
+python3 tests/api_insights.py         # totals, trend, top lists, timezone, quiet patients, isolation
 python3 tests/api_followups.py        # needs-attention lists, reminders, snooze, isolation (back-dates rows with the mysql CLI)
 ```
 
