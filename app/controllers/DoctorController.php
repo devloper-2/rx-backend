@@ -21,7 +21,7 @@ class DoctorController extends BaseController
      */
     public function summary(): void
     {
-        $d   = (int) $this->requireDoctor()['id'];
+        $d   = (int) $this->requireClinic()['id'];
         $row = $this->db->getRow(
             'SELECT COUNT(*) AS total, COALESCE(SUM(created_at >= (UTC_TIMESTAMP() - INTERVAL 7 DAY)), 0) AS this_week
              FROM patients WHERE doctor_id = :d AND deleted_at IS NULL AND is_active = 1',
@@ -52,6 +52,13 @@ class DoctorController extends BaseController
             [':d1' => $d, ':d2' => $d]
         );
         $drafts = $this->db->getRow("SELECT COUNT(*) AS n FROM prescriptions WHERE doctor_id = :d AND deleted_at IS NULL AND status = 'draft'", [':d' => $d]);
+        if ($this->isStaff()) {
+            $coll = $this->db->getRow('SELECT COALESCE(SUM(amount), 0) AS n FROM bill_payments WHERE doctor_id = :d AND paid_at >= :s AND paid_at < :u', [':d' => $d, ':s' => gmdate('Y-m-d H:i:s', $since), ':u' => $until]);
+            Response::success([
+                'collected_today' => (float) $coll['n'], 'patients_total' => (int) $row['total'], 'patients_this_week' => (int) $row['this_week'],
+                'queue_waiting' => (int) $ap['waiting'], 'queue_upcoming' => (int) $ap['upcoming'], 'queue_done' => (int) $ap['done'], 'appointments_today' => (int) $ap['total'],
+            ], 'Summary fetched');
+        }
         $coll = $this->db->getRow('SELECT COALESCE(SUM(amount), 0) AS n FROM bill_payments WHERE doctor_id = :d AND paid_at >= :s AND paid_at < :u', [':d' => $d, ':s' => gmdate('Y-m-d H:i:s', $since), ':u' => $until]);
         Response::success([
             'collected_today'     => (float) $coll['n'],
@@ -72,7 +79,7 @@ class DoctorController extends BaseController
     // ── Clinic (printed on every prescription) ───────────────────────────────
     public function clinic(): void
     {
-        $d = (int) $this->requireDoctor()['id'];
+        $d = (int) $this->requireClinic()['id'];
         Response::success(['clinic' => self::publicClinic($this->primaryClinic($d))], 'Clinic fetched');
     }
 

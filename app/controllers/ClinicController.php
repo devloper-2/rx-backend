@@ -10,7 +10,7 @@ class ClinicController extends BaseController
     /** GET doctor/hours */
     public function hours(): void
     {
-        $d = (int) $this->requireDoctor()['id'];
+        $d = (int) $this->requireClinic()['id'];
         Response::success(['hours' => $this->payload($d)], 'Hours fetched');
     }
 

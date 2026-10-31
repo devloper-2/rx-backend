@@ -80,6 +80,9 @@ abstract class BaseController
     protected function requireDoctor(): array
     {
         $auth   = $this->requireAuth();
+        if (($auth['role'] ?? 'doctor') !== 'doctor') {
+            Response::forbidden('This is only available to the doctor.');
+        }
         $doctor = $this->db->getRow(
             'SELECT * FROM doctors WHERE id = :id AND deleted_at IS NULL AND is_active = 1',
             [':id' => (int) ($auth['doctor_id'] ?? 0)]
@@ -88,6 +91,37 @@ abstract class BaseController
             Response::unauthorized('Your session is no longer valid. Please sign in again.');
         }
         return $doctor;
+    }
+
+    /** The signed-in receptionist's row, set by requireClinic(); null for the doctor. */
+    protected ?array $staff = null;
+
+    protected function isStaff(): bool
+    {
+        return ($this->authUser['role'] ?? 'doctor') !== 'doctor';
+    }
+
+    /**
+     * For endpoints a receptionist may use too: returns the clinic owner's (doctor's) row, so every query
+     * stays scoped to that doctor. A receptionist is re-checked against the database on every call, so
+     * switching them off (or deleting them) takes effect immediately.
+     */
+    protected function requireClinic(): array
+    {
+        $auth = $this->requireAuth();
+        if (!$this->isStaff()) {
+            return $this->requireDoctor();
+        }
+        $staff = $this->db->getRow(
+            'SELECT s.* FROM clinic_staff s JOIN doctors d ON d.id = s.doctor_id AND d.deleted_at IS NULL AND d.is_active = 1
+             WHERE s.id = :s AND s.doctor_id = :d AND s.deleted_at IS NULL AND s.is_active = 1',
+            [':s' => (int) ($auth['staff_id'] ?? 0), ':d' => (int) ($auth['doctor_id'] ?? 0)]
+        );
+        if (!$staff) {
+            Response::unauthorized('Your session is no longer valid. Please sign in again.');
+        }
+        $this->staff = $staff;
+        return $this->db->getRow('SELECT * FROM doctors WHERE id = :id', [':id' => (int) $staff['doctor_id']]);
     }
 
     /** Trim, strip tags and collapse whitespace. Output encoding is the client's job. */

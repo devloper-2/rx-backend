@@ -13,6 +13,7 @@ Plain-PHP REST API for the Prescription Rx doctor app. Apache + `mod_rewrite` + 
    mysql -uroot php_rest_api < migrations/sql/004_seed_lab_catalog.sql  # ~65 lab tests with reference ranges (safe to re-run)
    mysql -uroot php_rest_api < migrations/sql/005_followup_actions.sql # snoozed / dismissed follow-up items
    mysql -uroot php_rest_api < migrations/sql/006_hours_and_billing.sql # opening hours, holidays, fee, bills (safe to re-run)
+   mysql -uroot php_rest_api < migrations/sql/007_clinic_staff.sql      # receptionist accounts (safe to re-run)
    ```
 2. Make `logs/`, `uploads/` and `storage/` writable by Apache (`chmod -R a+rwX logs uploads storage` for local dev).
 3. Check `config/Config.php` (DB credentials, JWT secret). `ENV = 'local'` for development.
@@ -73,6 +74,22 @@ All responses: `{ status, code, message, data, errors, meta }`.
 | POST | `bills/{id}/payment` · `bills/{id}/cancel` | JWT | `amount, method` part-payments; cancelling removes the bill's money from the collection |
 | GET | `bills/summary?from=&to=` | JWT | collected (by payment date, split by method), billed, outstanding |
 | GET | `insights?days=7\|30\|90&today=&tz_offset=` | JWT | totals vs the previous period, 8 weekly bars, top diagnoses / medicines, weekdays, sex split, chronic patients not seen in 90+ days. `tz_offset` = minutes east of UTC |
+| GET/POST | `staff` | JWT (doctor) | list / add a receptionist: `name, countrycode, phone, password` (no OTP; the doctor hands over the password) |
+| PUT/DELETE | `staff/{id}` | JWT (doctor) | rename, switch off (`is_active:false`), set a new password (signs them out), remove |
+| PUT | `staff/password` | JWT (receptionist) | `current_password, password` — their own password; returns fresh tokens |
+
+## Receptionist access
+
+A receptionist signs in with the same `auth/login-new` (mobile + password) and gets a token with `role: receptionist`. Their queries are scoped to the doctor who created them. **Default-deny:** `requireDoctor()` rejects any non-doctor token (403), and only the endpoints that call `requireClinic()` accept a receptionist:
+
+| Allowed | Not allowed |
+|---|---|
+| patients (list, view, create, edit), `catalog/conditions` | prescriptions, lab/imaging, follow-ups, insights, catalog |
+| appointments (list, book, edit, check-in, cancel, no-show) | marking a visit *completed* (that happens when the doctor finishes the prescription) |
+| bills (list, create, collect payments, summary) | cancelling a bill, deleting a patient |
+| read-only `doctor/clinic`, `doctor/hours`; a trimmed `dashboard/summary` | profile, clinic/hours/holidays edits, staff management |
+
+A receptionist is re-checked against the database on every call, so switching them off, removing them, or switching off the doctor locks them out at once. They have their own refresh-token table (`staff_tokens`).
 
 ## Appointments and the queue
 
@@ -107,6 +124,7 @@ python3 tests/api_prescriptions.py    # prescriptions, catalog, clinic: validati
 python3 tests/api_appointments.py     # queue, booking, status flow, link with prescriptions
 python3 tests/api_investigations.py   # lab/imaging orders, results + flags, status flow, private report photos
 python3 tests/api_clinic_billing.py   # hours, holidays, fee, bills, part-payments, collection, isolation
+python3 tests/api_staff.py            # receptionist: creation, sign-in, allowed/blocked endpoints, switching off, isolation
 python3 tests/api_insights.py         # totals, trend, top lists, timezone, quiet patients, isolation
 python3 tests/api_followups.py        # needs-attention lists, reminders, snooze, isolation (back-dates rows with the mysql CLI)
 ```

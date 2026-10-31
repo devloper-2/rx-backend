@@ -130,6 +130,29 @@ class Auth
         return $token;
     }
 
+    /** Refresh token for a receptionist (one session each, like doctors). */
+    public function generateStaffRefreshToken(int $staffId): string
+    {
+        $token = bin2hex(random_bytes(40));
+        $this->db->executeQuery(
+            'INSERT INTO staff_tokens (staff_id, refresh_token, device_info, ip_address, expires_at, revoked_at, created_at)
+             VALUES (:s, :token, :device, :ip, :expires_at, NULL, :created_at)
+             ON DUPLICATE KEY UPDATE refresh_token = VALUES(refresh_token), device_info = VALUES(device_info),
+                 ip_address = VALUES(ip_address), expires_at = VALUES(expires_at), revoked_at = NULL, created_at = VALUES(created_at)',
+            [
+                ':s' => $staffId, ':token' => hash('sha256', $token),
+                ':device' => substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255), ':ip' => CommonHelper::getClientIp(),
+                ':expires_at' => date('Y-m-d H:i:s', time() + $this->refreshExpiry), ':created_at' => date('Y-m-d H:i:s'),
+            ]
+        );
+        return $token;
+    }
+
+    public function revokeAllForStaff(int $staffId): void
+    {
+        $this->db->update('staff_tokens', ['revoked_at' => date('Y-m-d H:i:s')], 'staff_id = :id AND revoked_at IS NULL', [':id' => $staffId]);
+    }
+
     /**
      * Exchange a valid refresh token for a new access token.
      * @throws RuntimeException on invalid / expired refresh token
@@ -145,7 +168,25 @@ class Auth
         );
 
         if (!$row) {
-            throw new RuntimeException('Session expired. Please sign in again.', 401);
+            // Not a doctor's session: maybe a receptionist's.
+            $st = $this->db->getRow(
+                'SELECT t.expires_at, s.id AS staff_id, s.doctor_id, s.is_active AS s_active, d.is_active AS d_active
+                 FROM staff_tokens t
+                 JOIN clinic_staff s ON s.id = t.staff_id AND s.deleted_at IS NULL
+                 JOIN doctors d ON d.id = s.doctor_id AND d.deleted_at IS NULL
+                 WHERE t.refresh_token = :token AND t.revoked_at IS NULL',
+                [':token' => hash('sha256', $refreshToken)]
+            );
+            if (!$st || strtotime($st['expires_at']) < time()) {
+                throw new RuntimeException('Session expired. Please sign in again.', 401);
+            }
+            if ((int) $st['s_active'] !== 1 || (int) $st['d_active'] !== 1) {
+                throw new RuntimeException('Account is not active', 403);
+            }
+            return [
+                'access_token' => $this->generateToken(['doctor_id' => (int) $st['doctor_id'], 'staff_id' => (int) $st['staff_id'], 'role' => 'receptionist']),
+                'token_type'   => 'Bearer',
+            ];
         }
 
         if (strtotime($row['expires_at']) < time()) {
@@ -169,6 +210,12 @@ class Auth
     {
         $updated = $this->db->update(
             'auth_tokens',
+            ['revoked_at' => date('Y-m-d H:i:s')],
+            'refresh_token = :token AND revoked_at IS NULL',
+            [':token' => hash('sha256', $refreshToken)]
+        );
+        $updated += $this->db->update(
+            'staff_tokens',
             ['revoked_at' => date('Y-m-d H:i:s')],
             'refresh_token = :token AND revoked_at IS NULL',
             [':token' => hash('sha256', $refreshToken)]

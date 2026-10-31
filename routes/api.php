@@ -44,6 +44,11 @@ $router->delete('patients/{id}',   'Patient', 'delete',     ['auth' => true]);
 
 $router->get('dashboard/summary', 'Doctor', 'summary', ['auth' => true]);
 $router->get('insights', 'Insights', 'index', ['auth' => true]);
+$router->get('staff',           'Staff', 'index',  ['auth' => true]);
+$router->post('staff',          'Staff', 'create', ['auth' => true, 'rate_limit' => ['max' => 20, 'window' => 3600]]);
+$router->put('staff/password',  'Staff', 'changeOwnPassword', ['auth' => true, 'rate_limit' => ['max' => 10, 'window' => 900]]);
+$router->put('staff/{id}',      'Staff', 'update', ['auth' => true]);
+$router->delete('staff/{id}',   'Staff', 'delete', ['auth' => true]);
 
 // ── Catalog for the prescription editor (JWT required) ───────────────────────
 $router->get('catalog/medicines',  'Catalog', 'medicines',    ['auth' => true]);

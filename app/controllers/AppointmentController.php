@@ -34,7 +34,7 @@ class AppointmentController extends BaseController
     // ── GET /appointments ────────────────────────────────────────────────────
     public function list(): void
     {
-        $doctor = $this->requireDoctor();
+        $doctor = $this->requireClinic();
         $sql    = $this->baseSelect() . ' WHERE a.doctor_id = :d';
         $params = [':d' => $doctor['id']];
 
@@ -59,7 +59,7 @@ class AppointmentController extends BaseController
     // ── POST /appointments ───────────────────────────────────────────────────
     public function create(): void
     {
-        $doctor  = $this->requireDoctor();
+        $doctor  = $this->requireClinic();
         $patient = $this->ownPatient((int) $this->request->get('patient_id'), (int) $doctor['id']);
         $walkIn  = filter_var($this->request->get('walk_in'), FILTER_VALIDATE_BOOLEAN);
         $in      = $this->parse($walkIn);
@@ -101,7 +101,7 @@ class AppointmentController extends BaseController
     // ── PUT /appointments/{id} ───────────────────────────────────────────────
     public function update(array $params): void
     {
-        $doctor = $this->requireDoctor();
+        $doctor = $this->requireClinic();
         $id     = (int) $params['id'];
         $appt   = $this->rowOrFail($id, (int) $doctor['id']);
         if (!in_array($appt['status'], ['scheduled', 'confirmed'], true)) {
@@ -124,11 +124,14 @@ class AppointmentController extends BaseController
     // ── POST /appointments/{id}/status ───────────────────────────────────────
     public function setStatus(array $params): void
     {
-        $doctor = $this->requireDoctor();
+        $doctor = $this->requireClinic();
         $id     = (int) $params['id'];
         $appt   = $this->rowOrFail($id, (int) $doctor['id']);
 
         $this->validate(['status' => 'required|in:scheduled,confirmed,arrived,completed,cancelled,no_show']);
+        if ($this->isStaff() && $this->request->input('status') === 'completed') {
+            Response::forbidden('A visit is completed when the doctor finishes the prescription.');
+        }
         $next = (string) $this->request->get('status');
         if (!in_array($next, self::FLOW[$appt['status']] ?? [], true)) {
             Response::error("An appointment that is “{$appt['status']}” can’t be marked “{$next}”.", 409);

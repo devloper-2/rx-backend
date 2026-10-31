@@ -24,7 +24,7 @@ class PatientController extends BaseController
     // ── GET /patients ────────────────────────────────────────────────────────
     public function list(): void
     {
-        $doctor = $this->requireDoctor();
+        $doctor = $this->requireClinic();
         $q      = trim((string) $this->request->get('q', ''));
 
         $sql    = 'SELECT * FROM patients WHERE doctor_id = :d AND deleted_at IS NULL AND is_active = 1';
@@ -50,7 +50,7 @@ class PatientController extends BaseController
     // ── POST /patients ───────────────────────────────────────────────────────
     public function create(): void
     {
-        $doctor = $this->requireDoctor();
+        $doctor = $this->requireClinic();
         $in     = $this->cleanInput();
 
         // Families share one phone, so a repeated mobile alone is fine. The same
@@ -83,14 +83,14 @@ class PatientController extends BaseController
     // ── GET /patients/{id} ───────────────────────────────────────────────────
     public function detail(array $params): void
     {
-        $doctor = $this->requireDoctor();
+        $doctor = $this->requireClinic();
         Response::success(['patient' => $this->loadOrFail((int) $params['id'], (int) $doctor['id'])], 'Patient fetched');
     }
 
     // ── PUT /patients/{id} ───────────────────────────────────────────────────
     public function update(array $params): void
     {
-        $doctor = $this->requireDoctor();
+        $doctor = $this->requireClinic();
         $id     = (int) $params['id'];
         $this->loadOrFail($id, (int) $doctor['id']);
         $in = $this->cleanInput();
@@ -123,7 +123,7 @@ class PatientController extends BaseController
     // ── GET /catalog/conditions ──────────────────────────────────────────────
     public function conditions(): void
     {
-        $doctor = $this->requireDoctor();
+        $doctor = $this->requireClinic();
         $rows   = $this->db->getRows(
             'SELECT id, name, category FROM chronic_conditions
              WHERE is_active = 1 AND (doctor_id IS NULL OR doctor_id = :d) ORDER BY name',

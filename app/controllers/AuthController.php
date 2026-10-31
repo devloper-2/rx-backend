@@ -140,6 +140,19 @@ class AuthController extends BaseController
 
         $doctor = $this->findByIdentifier((string) $data['identifier']);
 
+        if (!$doctor) {
+            // Not a doctor: try the clinic's receptionists.
+            $staff = $this->findStaff((string) $data['identifier']);
+            if ($staff && CommonHelper::verifyPassword($data['password'], $staff['password_hash']) && (int) $staff['is_active'] === 1) {
+                $this->db->update('clinic_staff', ['last_login_at' => gmdate('Y-m-d H:i:s')], 'id = :i', [':i' => $staff['id']]);
+                $this->logger->info('Receptionist logged in', ['staff_id' => $staff['id']]);
+                Response::success($this->staffSession($staff), 'Login successful');
+            }
+            if ($staff && (int) $staff['is_active'] !== 1 && CommonHelper::verifyPassword($data['password'], $staff['password_hash'])) {
+                Response::error('This account has been switched off. Please ask the doctor.', 403);
+            }
+        }
+
         if (!$doctor || !CommonHelper::verifyPassword($data['password'], $doctor['password_hash'])) {
             // Same message for both cases: don't reveal which numbers are registered.
             Response::error('Incorrect mobile number or password.', 401);
@@ -228,8 +241,48 @@ class AuthController extends BaseController
     // ── GET /auth/me ─────────────────────────────────────────────────────────
     public function me(): void
     {
+        if ($this->isStaff()) {
+            $this->requireClinic();
+            Response::success(['user' => self::publicStaff($this->staff)], 'Profile fetched');
+        }
         $doctor = $this->requireDoctor();
         Response::success(['user' => self::publicDoctor($doctor)], 'Profile fetched');
+    }
+
+    // ── Receptionist sessions ────────────────────────────────────────────────
+    public static function publicStaff(array $s): array
+    {
+        $db = Database::getInstance();
+        $d  = $db->getRow('SELECT name FROM doctors WHERE id = :i', [':i' => $s['doctor_id']]);
+        $c  = $db->getRow('SELECT name FROM clinics WHERE doctor_id = :i AND deleted_at IS NULL ORDER BY is_primary DESC, id LIMIT 1', [':i' => $s['doctor_id']]);
+        return [
+            'id' => (int) $s['id'], 'name' => $s['name'], 'mobile' => $s['mobile'], 'role' => $s['role'],
+            'doctor_id' => (int) $s['doctor_id'], 'doctor_name' => $d['name'] ?? null, 'clinic_name' => $c['name'] ?? null,
+            'email' => null, 'degree' => null, 'specialization' => null, 'registration_no' => null, 'experience_yrs' => null,
+            'plan' => null, 'plan_expires_at' => null, 'plan_days_left' => null, 'profile_percent' => 100, 'created_at' => $s['created_at'],
+        ];
+    }
+
+    private function staffSession(array $staff): array
+    {
+        return [
+            'user'          => self::publicStaff($staff),
+            'access_token'  => $this->auth->generateToken(['doctor_id' => (int) $staff['doctor_id'], 'staff_id' => (int) $staff['id'], 'role' => 'receptionist']),
+            'refresh_token' => $this->auth->generateStaffRefreshToken((int) $staff['id']),
+            'token_type'    => 'Bearer',
+            'expires_in'    => Config::get('jwt.expiry'),
+        ];
+    }
+
+    private function findStaff(string $identifier): ?array
+    {
+        $digits = ltrim(preg_replace('/\D/', '', trim($identifier)), '0');
+        if ($digits === '' || str_contains($identifier, '@')) return null;
+        if (str_starts_with(trim($identifier), '+')) {
+            return $this->db->getRow('SELECT * FROM clinic_staff WHERE mobile = :m AND deleted_at IS NULL', [':m' => '+' . $digits]);
+        }
+        $rows = $this->db->getRows('SELECT * FROM clinic_staff WHERE deleted_at IS NULL AND (mobile = :full OR mobile LIKE :tail) LIMIT 2', [':full' => '+' . $digits, ':tail' => '+%' . $digits]);
+        return count($rows) === 1 ? $rows[0] : null;
     }
 
     // ── Internals ────────────────────────────────────────────────────────────
@@ -336,7 +389,7 @@ class AuthController extends BaseController
         ];
     }
 
-    private function assertPasswordStrength(string $password): void
+    public static function assertPasswordStrength(string $password): void
     {
         if (!preg_match('/[A-Za-z]/', $password) || !preg_match('/\d/', $password)) {
             Response::validationError(['password' => ['Use at least one letter and one number.']]);
@@ -344,7 +397,7 @@ class AuthController extends BaseController
     }
 
     /** "+91" + "09012345678" → "+919012345678" (validated, ≤ 15 chars to fit the column). */
-    private function normalizeMobile(string $countryCode, string $phone): string
+    public static function normalizeMobile(string $countryCode, string $phone): string
     {
         $cc    = preg_replace('/\D/', '', $countryCode);
         $local = ltrim(preg_replace('/\D/', '', $phone), '0');

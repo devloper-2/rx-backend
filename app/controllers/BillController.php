@@ -11,7 +11,7 @@ class BillController extends BaseController
     /** GET bills?from=&to=&status=unpaid|paid|all&patient_id=&page= (from/to are UTC) */
     public function index(): void
     {
-        $d   = (int) $this->requireDoctor()['id'];
+        $d   = (int) $this->requireClinic()['id'];
         $sql = "SELECT b.*, pt.name AS pt_name, pt.mobile AS pt_mobile, pt.uhid AS pt_uhid FROM bills b JOIN patients pt ON pt.id = b.patient_id WHERE b.doctor_id = :d";
         $p   = [':d' => $d];
         if (($from = $this->utc('from')) !== null) { $sql .= ' AND b.bill_date >= :f'; $p[':f'] = $from; }
@@ -28,7 +28,7 @@ class BillController extends BaseController
     /** GET bills/summary?from=&to= — money collected (by payment date), billed and still owed */
     public function summary(): void
     {
-        $d = (int) $this->requireDoctor()['id'];
+        $d = (int) $this->requireClinic()['id'];
         $f = $this->utc('from') ?? gmdate('Y-m-d 00:00:00');
         $t = $this->utc('to') ?? gmdate('Y-m-d H:i:s', strtotime($f . ' UTC') + 86400);
         $by = $this->db->getRows('SELECT method, SUM(amount) AS amt, COUNT(*) AS n FROM bill_payments WHERE doctor_id = :d AND paid_at >= :f AND paid_at < :t GROUP BY method', [':d' => $d, ':f' => $f, ':t' => $t]);
@@ -44,14 +44,14 @@ class BillController extends BaseController
 
     public function show(array $params): void
     {
-        $d = (int) $this->requireDoctor()['id'];
+        $d = (int) $this->requireClinic()['id'];
         Response::success(['bill' => $this->shape($this->own((int) $params['id'], $d), true)], 'Bill fetched');
     }
 
     /** POST bills {patient_id, prescription_id?, appointment_id?, items:[{description,amount}], discount?, paid?, method?, notes?} */
     public function create(): void
     {
-        $d   = (int) $this->requireDoctor()['id'];
+        $d   = (int) $this->requireClinic()['id'];
         $err = [];
         $pid = (int) $this->request->input('patient_id', 0);
         $pt  = $pid > 0 ? $this->db->getRow('SELECT id FROM patients WHERE id = :i AND doctor_id = :d AND deleted_at IS NULL', [':i' => $pid, ':d' => $d]) : null;
@@ -103,7 +103,7 @@ class BillController extends BaseController
     /** POST bills/{id}/payment {amount, method} */
     public function pay(array $params): void
     {
-        $d = (int) $this->requireDoctor()['id'];
+        $d = (int) $this->requireClinic()['id'];
         $b = $this->own((int) $params['id'], $d);
         if ($b['status'] === 'cancelled') Response::error('This bill is cancelled.', 409);
         $err = [];
