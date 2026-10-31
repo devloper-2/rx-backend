@@ -1,0 +1,68 @@
+name: Deploy to Hostinger
+
+# Deploys this repo's contents to the Hostinger server over SSH/rsync
+# whenever main is pushed. See rx-backend/docs/DEPLOYMENT_HOSTINGER.md for
+# the one-time manual setup this workflow depends on (SSH access, repo
+# secrets, DB creation, domain + SSL).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect composer.json
+        id: composer
+        run: |
+          if [ -f "composer.json" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # This project has no composer.json today. If one is added later,
+      # this step installs production dependencies before deploy.
+      - name: Install composer dependencies (if present)
+        if: steps.composer.outputs.exists == 'true'
+        uses: php-actions/composer@v6
+        with:
+          php_version: "8.2"
+          args: --no-dev --optimize-autoloader
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HOSTINGER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.HOSTINGER_SSH_PORT }}" -H "${{ secrets.HOSTINGER_SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Rsync project files to Hostinger
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.HOSTINGER_SSH_PORT }} -o StrictHostKeyChecking=no" \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='tests/' \
+            --exclude='.env' \
+            --exclude='.env.example' \
+            --exclude='logs/*.log' \
+            --exclude='storage/reports/' \
+            --exclude='storage/rate_limit/' \
+            --exclude='uploads/user/' \
+            ./ \
+            "${{ secrets.HOSTINGER_SSH_USER }}@${{ secrets.HOSTINGER_SSH_HOST }}:${{ secrets.HOSTINGER_DEPLOY_PATH }}"
+
+      - name: Post-deploy checks (writable dirs, no auto-migrations)
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "${{ secrets.HOSTINGER_SSH_PORT }}" -o StrictHostKeyChecking=no \
+            "${{ secrets.HOSTINGER_SSH_USER }}@${{ secrets.HOSTINGER_SSH_HOST }}" \
+            "cd '${{ secrets.HOSTINGER_DEPLOY_PATH }}' && \
+             mkdir -p logs uploads storage storage/rate_limit storage/reports && \
+             chmod -R a+rwX logs uploads storage && \
+             echo 'Deployed. Remember: new files under migrations/sql/*.sql are NOT auto-applied by this workflow — run them by hand the first time a new one appears (see README + docs/DEPLOYMENT_HOSTINGER.md). This avoids ever running untrusted/raw SQL against production automatically.'"
