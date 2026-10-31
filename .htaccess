@@ -17,10 +17,12 @@ RewriteRule ^routes/ - [F,L]
 RewriteRule ^migrations/ - [F,L]
 RewriteRule ^storage/ - [F,L]
 RewriteRule ^tests/ - [F,L]
+RewriteRule ^docs/ - [F,L]
+RewriteRule (^|/)\.github(/|$) - [F,L]
 
 # Never serve repository metadata, database dumps, docs or scripts
 RewriteRule (^|/)\.git(/|$) - [F,L]
-RewriteRule \.(sql|md|bak|py|sh|log|ini|env)$ - [F,L]
+RewriteRule \.(sql|md|bak|py|sh|log|ini|env|env\.example|yml|yaml)$ - [F,L]
 
 # Allow uploads to be accessed directly
 RewriteRule ^uploads/ - [L]
